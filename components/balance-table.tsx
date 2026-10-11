@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { StockpileBalance } from '@/lib/queries'
-import { cn, formatTons } from '@/lib/utils'
+import { cn, formatGrade, formatMetal, formatTons } from '@/lib/utils'
 
 export function BalanceTable({ balances }: { balances: StockpileBalance[] }) {
   const max = Math.max(1, ...balances.map((b) => b.balance))
@@ -13,8 +13,10 @@ export function BalanceTable({ balances }: { balances: StockpileBalance[] }) {
       received: acc.received + b.received,
       fed: acc.fed + b.fed,
       balance: acc.balance + b.balance,
+      positive: acc.positive + Math.max(0, b.balance),
+      metal: acc.metal + Math.max(0, b.balance) * b.auGrade,
     }),
-    { initial: 0, received: 0, fed: 0, balance: 0 },
+    { initial: 0, received: 0, fed: 0, balance: 0, positive: 0, metal: 0 },
   )
 
   return (
@@ -41,6 +43,8 @@ export function BalanceTable({ balances }: { balances: StockpileBalance[] }) {
                 <TableHead className="text-right">Поступление</TableHead>
                 <TableHead className="text-right">Подача</TableHead>
                 <TableHead className="text-right">Остаток</TableHead>
+                <TableHead className="text-right">Au, г/т</TableHead>
+                <TableHead className="text-right">Металл, г</TableHead>
                 <TableHead className="hidden w-48 md:table-cell">
                   <span className="sr-only">Заполненность</span>
                 </TableHead>
@@ -72,6 +76,10 @@ export function BalanceTable({ balances }: { balances: StockpileBalance[] }) {
                   >
                     {formatTons(b.balance)}
                   </TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{formatGrade(b.auGrade)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums text-muted-foreground">
+                    {formatMetal(Math.max(0, b.balance) * b.auGrade)}
+                  </TableCell>
                   <TableCell className="hidden md:table-cell">
                     <div className="h-2 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
                       <div
@@ -90,6 +98,10 @@ export function BalanceTable({ balances }: { balances: StockpileBalance[] }) {
                 <TableCell className="text-right font-mono tabular-nums">+{formatTons(totals.received)}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums">−{formatTons(totals.fed)}</TableCell>
                 <TableCell className="text-right font-mono font-semibold tabular-nums">{formatTons(totals.balance)}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">
+                  {formatGrade(totals.positive > 0 ? totals.metal / totals.positive : 0)}
+                </TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{formatMetal(totals.metal)}</TableCell>
                 <TableCell className="hidden md:table-cell" />
               </TableRow>
             </TableFooter>

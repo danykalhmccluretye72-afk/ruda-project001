@@ -1,18 +1,21 @@
-import { BucketWeightForm } from '@/components/bucket-weight-form'
+import { LoaderSettings } from '@/components/loader-settings'
 import { PageHeader } from '@/components/page-header'
 import { StockpileSettings } from '@/components/stockpile-settings'
-import { getBucketWeight, getStockpiles } from '@/lib/queries'
+import { getLoaders, getStockpiles } from '@/lib/queries'
 
 export const dynamic = 'force-dynamic'
 
 export default async function SettingsPage() {
-  const [bucketWeight, piles] = await Promise.all([getBucketWeight(), getStockpiles()])
+  const [loaders, piles] = await Promise.all([getLoaders(), getStockpiles()])
 
   return (
     <>
-      <PageHeader title="Настройки" description="Вес ковша погрузчика и исходные остатки по штабелям." />
-      <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
-        <BucketWeightForm bucketWeight={bucketWeight} />
+      <PageHeader
+        title="Настройки"
+        description="Погрузчики и вес ковша, исходные остатки и содержание золота по штабелям. Время — Хабаровск (UTC+10)."
+      />
+      <div className="grid gap-6 xl:grid-cols-[400px_1fr]">
+        <LoaderSettings loaders={loaders} />
         <StockpileSettings stockpiles={piles} />
       </div>
     </>

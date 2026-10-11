@@ -1,25 +1,25 @@
 import { FeedForm } from '@/components/feed-form'
 import { FeedsTable } from '@/components/feeds-table'
 import { PageHeader } from '@/components/page-header'
-import { getBucketWeight, getRecentFeeds, getStockpiles } from '@/lib/queries'
+import { getLoaders, getRecentFeeds, getStockpiles } from '@/lib/queries'
 
 export const dynamic = 'force-dynamic'
 
 export default async function FeedsPage() {
-  const [piles, feeds, bucketWeight] = await Promise.all([
+  const [piles, feeds, loaders] = await Promise.all([
     getStockpiles({ activeOnly: true }),
     getRecentFeeds(),
-    getBucketWeight(),
+    getLoaders({ activeOnly: true }),
   ])
 
   return (
     <>
       <PageHeader
         title="Подача в переработку"
-        description="Регистрация ковшей погрузчика. Тоннаж = количество ковшей × вес ковша на момент записи."
+        description="Тоннаж = ковши × вес ковша погрузчика. Смена определяется автоматически по времени Хабаровска."
       />
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
-        <FeedForm stockpiles={piles} bucketWeight={bucketWeight} />
+        <FeedForm stockpiles={piles} loaders={loaders} />
         <FeedsTable feeds={feeds} />
       </div>
     </>

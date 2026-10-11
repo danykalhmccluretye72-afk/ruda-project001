@@ -2,13 +2,23 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ArrowDownToLine, ArrowUpFromLine, LayoutGrid, Mountain, Settings } from 'lucide-react'
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  CalendarClock,
+  ClipboardList,
+  LayoutGrid,
+  Mountain,
+  Settings,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const links = [
   { href: '/', label: 'Остатки', icon: LayoutGrid },
   { href: '/receipts', label: 'Поступление', icon: ArrowDownToLine },
   { href: '/feeds', label: 'Подача в переработку', icon: ArrowUpFromLine },
+  { href: '/shifts', label: 'Шихта по сменам', icon: ClipboardList },
+  { href: '/planning', label: 'Планирование', icon: CalendarClock },
   { href: '/settings', label: 'Настройки', icon: Settings },
 ]
 

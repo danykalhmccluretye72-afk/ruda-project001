@@ -1,4 +1,4 @@
-import { boolean, integer, numeric, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core'
+import { boolean, date, integer, numeric, pgTable, serial, smallint, text, timestamp, unique } from 'drizzle-orm/pg-core'
 
 export const appSettings = pgTable('app_settings', {
   key: text('key').primaryKey(),
@@ -10,6 +10,15 @@ export const stockpiles = pgTable('stockpiles', {
   id: serial('id').primaryKey(),
   name: text('name').notNull().unique(),
   initialTonnage: numeric('initial_tonnage', { precision: 14, scale: 3 }).notNull().default('0'),
+  auGrade: numeric('au_grade', { precision: 10, scale: 3 }).notNull().default('0'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const loaders = pgTable('loaders', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  bucketWeightT: numeric('bucket_weight_t', { precision: 10, scale: 3 }).notNull(),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
@@ -32,6 +41,23 @@ export const oreFeeds = pgTable('ore_feeds', {
   bucketCount: integer('bucket_count').notNull(),
   bucketWeightT: numeric('bucket_weight_t', { precision: 10, scale: 3 }).notNull(),
   loader: text('loader'),
+  loaderId: integer('loader_id'),
+  auGrade: numeric('au_grade', { precision: 10, scale: 3 }).notNull().default('0'),
+  shiftDate: date('shift_date'),
+  shiftNo: smallint('shift_no'),
   note: text('note'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+export const shiftPlans = pgTable(
+  'shift_plans',
+  {
+    id: serial('id').primaryKey(),
+    shiftDate: date('shift_date').notNull(),
+    shiftNo: smallint('shift_no').notNull(),
+    stockpileId: integer('stockpile_id').notNull(),
+    plannedT: numeric('planned_t', { precision: 12, scale: 3 }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.shiftDate, t.shiftNo, t.stockpileId)],
+)

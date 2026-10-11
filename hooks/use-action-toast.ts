@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import type { ActionState } from '@/app/actions'
+import { fromKhvInputValue, toKhvInputValue } from '@/lib/shift'
 
 export function useActionToast(state: ActionState, onSuccess?: () => void) {
   const lastState = useRef<ActionState>(null)
@@ -20,14 +21,13 @@ export function useActionToast(state: ActionState, onSuccess?: () => void) {
 }
 
 export function toLocalInputValue(date: Date) {
-  const offset = date.getTimezoneOffset() * 60000
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16)
+  return toKhvInputValue(date)
 }
 
 export function withIsoDate(formData: FormData) {
   const local = formData.get('occurredAtLocal')
   if (typeof local === 'string' && local) {
-    formData.set('occurredAt', new Date(local).toISOString())
+    formData.set('occurredAt', fromKhvInputValue(local).toISOString())
   }
   formData.delete('occurredAtLocal')
   return formData

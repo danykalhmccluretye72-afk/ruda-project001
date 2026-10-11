@@ -1,12 +1,14 @@
-import { PageHeader } from '@/components/page-header'
 import { BalanceSummary } from '@/components/balance-summary'
 import { BalanceTable } from '@/components/balance-table'
-import { getBalances, getBucketWeight } from '@/lib/queries'
+import { PageHeader } from '@/components/page-header'
+import { getBalances, getShiftFeedReport, getShiftPlan } from '@/lib/queries'
+import { getShift } from '@/lib/shift'
 
 export const dynamic = 'force-dynamic'
 
 export default async function Page() {
-  const [balances, bucketWeight] = await Promise.all([getBalances(), getBucketWeight()])
+  const shift = getShift(new Date())
+  const [balances, report, plan] = await Promise.all([getBalances(), getShiftFeedReport(shift), getShiftPlan(shift)])
 
   return (
     <>
@@ -14,7 +16,7 @@ export default async function Page() {
         title="Остатки руды по штабелям"
         description="Остаток = исходный остаток + поступление (автовесовая) − подача в переработку (ковши погрузчика)."
       />
-      <BalanceSummary balances={balances} bucketWeight={bucketWeight} />
+      <BalanceSummary balances={balances} shift={shift} report={report} plan={plan} />
       <BalanceTable balances={balances} />
     </>
   )

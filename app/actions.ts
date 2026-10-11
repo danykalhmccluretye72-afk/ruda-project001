@@ -1,11 +1,11 @@
 'use server'
 
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { db } from '@/lib/db'
-import { appSettings, oreFeeds, oreReceipts, stockpiles } from '@/lib/db/schema'
-import { BUCKET_WEIGHT_KEY, getBucketWeight } from '@/lib/queries'
+import { loaders, oreFeeds, oreReceipts, shiftPlans, stockpiles } from '@/lib/db/schema'
+import { formatShift, getShift, parseShiftKey } from '@/lib/shift'
 import { formatTons } from '@/lib/utils'
 
 export type ActionState = { ok: boolean; message: string } | null
@@ -35,6 +35,10 @@ const positiveNumber = (label: string) =>
     .number({ message: `${label}: введите число` })
     .refine((v) => Number.isFinite(v) && v > 0, `${label}: значение должно быть больше нуля`)
 
+const gradeSchema = z.coerce
+  .number({ message: 'Содержание: введите число' })
+  .refine((v) => Number.isFinite(v) && v >= 0 && v <= 1000, 'Содержание: от 0 до 1000 г/т')
+
 function revalidateAll() {
   revalidatePath('/', 'layout')
 }
@@ -43,13 +47,15 @@ function fail(error: z.ZodError): ActionState {
   return { ok: false, message: error.issues[0]?.message ?? 'Ошибка ввода' }
 }
 
-async function assertActiveStockpile(id: number) {
+async function getActiveStockpile(id: number) {
   const [pile] = await db
-    .select({ id: stockpiles.id })
+    .select({ id: stockpiles.id, auGrade: stockpiles.auGrade })
     .from(stockpiles)
     .where(and(eq(stockpiles.id, id), eq(stockpiles.isActive, true)))
-  return Boolean(pile)
+  return pile ?? null
 }
+
+/* ---------- Поступление ---------- */
 
 const receiptSchema = z.object({
   stockpileId: z.coerce.number().int().positive({ message: 'Выберите штабель' }),
@@ -64,7 +70,7 @@ export async function addReceipt(_prev: ActionState, formData: FormData): Promis
   const parsed = receiptSchema.safeParse(Object.fromEntries(formData))
   if (!parsed.success) return fail(parsed.error)
   const data = parsed.data
-  if (!(await assertActiveStockpile(data.stockpileId))) return { ok: false, message: 'Штабель не найден' }
+  if (!(await getActiveStockpile(data.stockpileId))) return { ok: false, message: 'Штабель не найден' }
 
   await db.insert(oreReceipts).values({
     stockpileId: data.stockpileId,
@@ -84,15 +90,17 @@ export async function deleteReceipt(formData: FormData) {
   revalidateAll()
 }
 
+/* ---------- Подача ---------- */
+
 const feedSchema = z.object({
   stockpileId: z.coerce.number().int().positive({ message: 'Выберите штабель' }),
+  loaderId: z.coerce.number().int().positive({ message: 'Выберите погрузчик' }),
   occurredAt: occurredAtSchema,
   bucketCount: z.coerce
     .number({ message: 'Количество ковшей: введите число' })
     .int('Количество ковшей должно быть целым')
     .positive('Количество ковшей должно быть больше нуля')
     .max(10000, 'Количество ковшей: не более 10000 за запись'),
-  loader: optionalText,
   note: optionalText,
 })
 
@@ -100,21 +108,33 @@ export async function addFeed(_prev: ActionState, formData: FormData): Promise<A
   const parsed = feedSchema.safeParse(Object.fromEntries(formData))
   if (!parsed.success) return fail(parsed.error)
   const data = parsed.data
-  if (!(await assertActiveStockpile(data.stockpileId))) return { ok: false, message: 'Штабель не найден' }
 
-  const bucketWeight = await getBucketWeight()
+  const pile = await getActiveStockpile(data.stockpileId)
+  if (!pile) return { ok: false, message: 'Штабель не найден' }
+  const [loader] = await db
+    .select()
+    .from(loaders)
+    .where(and(eq(loaders.id, data.loaderId), eq(loaders.isActive, true)))
+  if (!loader) return { ok: false, message: 'Погрузчик не найден' }
+
+  const bucketWeight = Number(loader.bucketWeightT)
+  const shift = getShift(data.occurredAt)
   await db.insert(oreFeeds).values({
     stockpileId: data.stockpileId,
+    loaderId: loader.id,
+    loader: loader.name,
     occurredAt: data.occurredAt,
     bucketCount: data.bucketCount,
-    bucketWeightT: bucketWeight.toFixed(3),
-    loader: data.loader,
+    bucketWeightT: loader.bucketWeightT,
+    auGrade: pile.auGrade,
+    shiftDate: shift.date,
+    shiftNo: shift.shift,
     note: data.note,
   })
   revalidateAll()
   return {
     ok: true,
-      message: `Подача ${data.bucketCount} ковш. × ${formatTons(bucketWeight)} т = ${formatTons(data.bucketCount * bucketWeight)} т записана`,
+    message: `Подача ${data.bucketCount} ковш. × ${formatTons(bucketWeight)} т = ${formatTons(data.bucketCount * bucketWeight)} т записана в смену ${shift.shift}`,
   }
 }
 
@@ -124,26 +144,58 @@ export async function deleteFeed(formData: FormData) {
   revalidateAll()
 }
 
-export async function updateBucketWeight(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const parsed = positiveNumber('Вес ковша')
-    .refine((v) => v <= 100, 'Вес ковша: не более 100 т')
-    .safeParse(formData.get('bucketWeight'))
-  if (!parsed.success) return fail(parsed.error)
+/* ---------- Погрузчики ---------- */
 
-  const value = String(parsed.data)
-  await db
-    .insert(appSettings)
-    .values({ key: BUCKET_WEIGHT_KEY, value })
-    .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: new Date() } })
+const loaderSchema = z.object({
+  name: z.string().trim().min(1, 'Укажите название погрузчика').max(100),
+  bucketWeightT: positiveNumber('Вес ковша').refine((v) => v <= 100, 'Вес ковша: не более 100 т'),
+})
+
+export async function addLoader(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = loaderSchema.safeParse(Object.fromEntries(formData))
+  if (!parsed.success) return fail(parsed.error)
+  const inserted = await db
+    .insert(loaders)
+    .values({ name: parsed.data.name, bucketWeightT: parsed.data.bucketWeightT.toFixed(3) })
+    .onConflictDoNothing({ target: loaders.name })
+    .returning({ id: loaders.id })
+  if (inserted.length === 0) return { ok: false, message: 'Погрузчик с таким названием уже существует' }
   revalidateAll()
-  return { ok: true, message: `Вес ковша установлен: ${parsed.data} т` }
+  return { ok: true, message: `Погрузчик «${parsed.data.name}» добавлен` }
 }
+
+export async function updateLoader(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const id = z.coerce.number().int().positive().safeParse(formData.get('id'))
+  if (!id.success) return { ok: false, message: 'Погрузчик не найден' }
+  const parsed = loaderSchema.safeParse(Object.fromEntries(formData))
+  if (!parsed.success) return fail(parsed.error)
+  try {
+    await db
+      .update(loaders)
+      .set({ name: parsed.data.name, bucketWeightT: parsed.data.bucketWeightT.toFixed(3) })
+      .where(eq(loaders.id, id.data))
+  } catch {
+    return { ok: false, message: 'Погрузчик с таким названием уже существует' }
+  }
+  revalidateAll()
+  return { ok: true, message: 'Погрузчик обновлён. Новый вес ковша применяется к следующим подачам.' }
+}
+
+export async function toggleLoaderActive(formData: FormData) {
+  const id = z.coerce.number().int().positive().parse(formData.get('id'))
+  const active = formData.get('active') === 'true'
+  await db.update(loaders).set({ isActive: active }).where(eq(loaders.id, id))
+  revalidateAll()
+}
+
+/* ---------- Штабели ---------- */
 
 const stockpileSchema = z.object({
   name: z.string().trim().min(1, 'Укажите название штабеля').max(100),
   initialTonnage: z.coerce
     .number({ message: 'Исходный остаток: введите число' })
     .refine((v) => Number.isFinite(v) && v >= 0, 'Исходный остаток не может быть отрицательным'),
+  auGrade: gradeSchema,
 })
 
 export async function addStockpile(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -151,7 +203,11 @@ export async function addStockpile(_prev: ActionState, formData: FormData): Prom
   if (!parsed.success) return fail(parsed.error)
   const inserted = await db
     .insert(stockpiles)
-    .values({ name: parsed.data.name, initialTonnage: parsed.data.initialTonnage.toFixed(3) })
+    .values({
+      name: parsed.data.name,
+      initialTonnage: parsed.data.initialTonnage.toFixed(3),
+      auGrade: parsed.data.auGrade.toFixed(3),
+    })
     .onConflictDoNothing({ target: stockpiles.name })
     .returning({ id: stockpiles.id })
   if (inserted.length === 0) return { ok: false, message: 'Штабель с таким названием уже существует' }
@@ -168,7 +224,11 @@ export async function updateStockpile(_prev: ActionState, formData: FormData): P
   try {
     await db
       .update(stockpiles)
-      .set({ name: parsed.data.name, initialTonnage: parsed.data.initialTonnage.toFixed(3) })
+      .set({
+        name: parsed.data.name,
+        initialTonnage: parsed.data.initialTonnage.toFixed(3),
+        auGrade: parsed.data.auGrade.toFixed(3),
+      })
       .where(eq(stockpiles.id, id.data))
   } catch {
     return { ok: false, message: 'Штабель с таким названием уже существует' }
@@ -182,4 +242,51 @@ export async function toggleStockpileActive(formData: FormData) {
   const active = formData.get('active') === 'true'
   await db.update(stockpiles).set({ isActive: active }).where(eq(stockpiles.id, id))
   revalidateAll()
+}
+
+/* ---------- Планирование ---------- */
+
+const planValue = z.coerce
+  .number({ message: 'План: введите число' })
+  .refine((v) => Number.isFinite(v) && v >= 0 && v <= 100000, 'План: от 0 до 100 000 т')
+
+export async function saveShiftPlan(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const key = parseShiftKey(String(formData.get('shiftDate') ?? ''), String(formData.get('shiftNo') ?? ''))
+  if (!key) return { ok: false, message: 'Некорректная смена' }
+
+  const entries: { stockpileId: number; plannedT: number }[] = []
+  for (const [name, raw] of formData.entries()) {
+    if (!name.startsWith('plan_')) continue
+    const stockpileId = Number(name.slice(5))
+    if (!Number.isInteger(stockpileId) || stockpileId <= 0) continue
+    const text = String(raw).trim().replace(',', '.')
+    const parsed = planValue.safeParse(text === '' ? 0 : text)
+    if (!parsed.success) return fail(parsed.error)
+    entries.push({ stockpileId, plannedT: parsed.data })
+  }
+
+  const ids = entries.map((e) => e.stockpileId)
+  const valid = ids.length
+    ? await db.select({ id: stockpiles.id }).from(stockpiles).where(inArray(stockpiles.id, ids))
+    : []
+  const validIds = new Set(valid.map((v) => v.id))
+  const filtered = entries.filter((e) => validIds.has(e.stockpileId))
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(shiftPlans)
+      .where(and(eq(shiftPlans.shiftDate, key.date), eq(shiftPlans.shiftNo, key.shift)))
+    const rows = filtered
+      .filter((e) => e.plannedT > 0)
+      .map((e) => ({
+        shiftDate: key.date,
+        shiftNo: key.shift,
+        stockpileId: e.stockpileId,
+        plannedT: e.plannedT.toFixed(3),
+      }))
+    if (rows.length) await tx.insert(shiftPlans).values(rows)
+  })
+  revalidateAll()
+  const total = filtered.reduce((s, e) => s + e.plannedT, 0)
+  return { ok: true, message: `План на ${formatShift(key)} сохранён: ${formatTons(total)} т` }
 }

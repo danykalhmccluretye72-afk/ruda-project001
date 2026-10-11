@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useActionToast } from '@/hooks/use-action-toast'
 import type { Stockpile } from '@/lib/queries'
-import { formatTons } from '@/lib/utils'
+import { formatGrade, formatTons } from '@/lib/utils'
 
 function StockpileDialog({ stockpile }: { stockpile?: Stockpile }) {
   const [open, setOpen] = useState(false)
@@ -71,6 +71,24 @@ function StockpileDialog({ stockpile }: { stockpile?: Stockpile }) {
               className="font-mono"
               defaultValue={stockpile?.initialTonnage ?? 0}
             />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="pile-grade">Содержание золота, г/т</Label>
+            <Input
+              id="pile-grade"
+              name="auGrade"
+              type="number"
+              inputMode="decimal"
+              step="0.001"
+              min="0"
+              max="1000"
+              required
+              className="font-mono"
+              defaultValue={stockpile?.auGrade ?? 0}
+            />
+            <p className="text-xs text-muted-foreground">
+              Содержание фиксируется в записи подачи на момент её ввода.
+            </p>
           </div>
           <DialogFooter>
             <Button type="submit" disabled={pending}>
@@ -129,6 +147,7 @@ export function StockpileSettings({ stockpiles }: { stockpiles: Stockpile[] }) {
               <TableRow>
                 <TableHead>Штабель</TableHead>
                 <TableHead className="text-right">Исходный остаток, т</TableHead>
+                <TableHead className="text-right">Au, г/т</TableHead>
                 <TableHead className="w-24">
                   <span className="sr-only">Действия</span>
                 </TableHead>
@@ -144,6 +163,7 @@ export function StockpileSettings({ stockpiles }: { stockpiles: Stockpile[] }) {
                     </div>
                   </TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{formatTons(s.initialTonnage)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{formatGrade(s.auGrade)}</TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
                       <StockpileDialog stockpile={s} />
