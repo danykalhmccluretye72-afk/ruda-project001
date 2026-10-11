@@ -1,0 +1,7 @@
+node_modules
+.next
+.git
+.env*
+user_read_only_context
+v0_memories
+tsconfig.tsbuildinfo

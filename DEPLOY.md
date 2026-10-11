@@ -1,0 +1,84 @@
+# Развёртывание в российском облаке
+
+Приложение и база PostgreSQL запускаются одной командой через Docker Compose на одной виртуальной машине. Подходит любое облако в РФ: Yandex Cloud, VK Cloud, Selectel, Timeweb Cloud. Ниже — на примере Yandex Cloud.
+
+## 1. Создать виртуальную машину
+
+1. Зарегистрируйтесь на https://console.yandex.cloud и создайте платёжный аккаунт (для юрлица — по договору).
+2. **Compute Cloud → Создать ВМ**:
+   - Образ: **Ubuntu 24.04 LTS**
+   - Зона: `ru-central1-a` (или любая)
+   - vCPU: 2, RAM: 2–4 ГБ, диск: SSD 20 ГБ (для склада этого достаточно с большим запасом)
+   - Публичный IP: **автоматически** (затем в разделе VPC сделайте его **статическим**)
+   - Доступ: логин `ubuntu` + ваш SSH-ключ
+3. В группе безопасности откройте входящие порты **22, 80, 443**.
+
+## 2. Установить Docker
+
+```bash
+ssh ubuntu@<IP-адрес>
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER && exit
+```
+
+Зайдите по SSH заново.
+
+## 3. Загрузить код
+
+Код лежит в репозитории GitHub. Либо клонируйте его (`git clone <url>`), либо скачайте ZIP в v0 и скопируйте на сервер:
+
+```bash
+scp ore-stockyard.zip ubuntu@<IP>:~ && ssh ubuntu@<IP> "sudo apt install -y unzip && unzip ore-stockyard.zip -d app"
+```
+
+## 4. Настроить и запустить
+
+```bash
+cd ~/app
+cp .env.example .env
+nano .env          # задайте POSTGRES_PASSWORD (длинный случайный), при наличии домена — DOMAIN
+docker compose up -d --build
+```
+
+Через 2–3 минуты приложение доступно по адресу `http://<IP-адрес>`.
+
+Схема БД создаётся автоматически при первом запуске (`db/init.sql`). Затем откройте **Настройки** и заведите штабели, начальные остатки, содержание и погрузчики.
+
+### HTTPS с доменом
+
+Направьте A-запись домена (например, `sklad.fabrika.ru`) на IP сервера, в `.env` укажите `DOMAIN=sklad.fabrika.ru` и выполните `docker compose up -d`. Сертификат Let's Encrypt выпустится автоматически.
+
+## Обслуживание
+
+| Задача | Команда |
+| --- | --- |
+| Обновить после изменений кода | `git pull && docker compose up -d --build` |
+| Логи приложения | `docker compose logs -f app` |
+| Резервная копия БД | `docker compose exec db pg_dump -U stockyard stockyard > backup_$(date +%F).sql` |
+| Восстановление | `cat backup.sql \| docker compose exec -T db psql -U stockyard stockyard` |
+
+Рекомендуется настроить ежедневный бэкап через `crontab -e`, а также включить **снимки диска по расписанию** в консоли облака.
+
+## Вариант: управляемая БД (Yandex Managed PostgreSQL)
+
+Если нужны автоматические бэкапы и отказоустойчивость силами облака:
+
+1. Создайте кластер **Managed Service for PostgreSQL**, БД и пользователя.
+2. Выполните `db/init.sql` в созданной БД (через консоль облака или `psql`).
+3. Скачайте сертификат: `curl -o root.crt https://storage.yandexcloud.net/cloud-certs/CA.pem`
+4. В `.env` раскомментируйте `DATABASE_URL` с хостом кластера; в `docker-compose.yml` удалите сервис `db` и `depends_on`, а для `app` смонтируйте `./root.crt:/app/root.crt:ro`.
+
+## Безопасность
+
+В приложении нет авторизации. Ограничьте доступ одним из способов:
+- в группе безопасности разрешите порты 80/443 только с IP-адресов фабрики;
+- или подключайтесь через VPN предприятия.
+
+## Перенос текущих данных из Neon
+
+Если в демо-версии уже внесены данные, их можно перенести:
+
+```bash
+pg_dump --data-only --no-owner "<строка подключения Neon>" > data.sql
+cat data.sql | docker compose exec -T db psql -U stockyard stockyard
+```
