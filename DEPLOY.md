@@ -74,11 +74,15 @@ docker compose up -d --build
 - в группе безопасности разрешите порты 80/443 только с IP-адресов фабрики;
 - или подключайтесь через VPN предприятия.
 
-## Перенос текущих данных из Neon
-
-Если в демо-версии уже внесены данные, их можно перенести:
+## Быстрый запуск на Ubuntu 24 скриптами
 
 ```bash
-pg_dump --data-only --no-owner "<строка подключения Neon>" > data.sql
-cat data.sql | docker compose exec -T db psql -U stockyard stockyard
+git clone -b v0/shifts-planning https://github.com/danykalhmccluretye72-1253/v0-dhw8C8plxbo.git app
+cd app
+bash scripts/setup-server.sh        # Docker, .env с паролем, запуск
+bash scripts/import-from-neon.sh    # перенос данных из Neon
 ```
+
+## Перенос текущих данных из Neon
+
+`scripts/import-from-neon.sh` спросит строку подключения Neon (v0 → Settings → Vars → `DATABASE_URL_UNPOOLED`), сделает резервную копию локальной БД, выгрузит таблицы из Neon и загрузит их одной транзакцией. Если что-то пойдёт не так, локальная БД останется прежней. Скрипт можно запускать повторно, например в день окончательного переезда.
