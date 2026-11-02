@@ -1,8 +1,15 @@
 'use client'
 
-import { Archive, ArchiveRestore, Pencil, Plus } from 'lucide-react'
+import { Archive, ArchiveRestore, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useActionState, useCallback, useState, useTransition } from 'react'
-import { addStockpile, toggleStockpileActive, updateStockpile, type ActionState } from '@/app/actions'
+import { toast } from 'sonner'
+import {
+  addStockpile,
+  deleteStockpile,
+  toggleStockpileActive,
+  updateStockpile,
+  type ActionState,
+} from '@/app/actions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -128,6 +135,74 @@ function ToggleActiveButton({ stockpile }: { stockpile: Stockpile }) {
   )
 }
 
+function DeleteStockpileDialog({ stockpile }: { stockpile: Stockpile }) {
+  const [open, setOpen] = useState(false)
+  const [confirmName, setConfirmName] = useState('')
+  const [pending, startTransition] = useTransition()
+  const matches = confirmName.trim() === stockpile.name
+
+  function handleDelete() {
+    startTransition(async () => {
+      const result = await deleteStockpile(stockpile.id, confirmName)
+      if (result?.ok) {
+        toast.success(result.message)
+        setOpen(false)
+      } else if (result) {
+        toast.error(result.message)
+      }
+    })
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) setConfirmName('')
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-destructive hover:text-destructive"
+          aria-label={`Удалить ${stockpile.name} полностью`}
+          title="Удалить полностью"
+        >
+          <Trash2 className="size-4" aria-hidden="true" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Удалить штабель «{stockpile.name}»?</DialogTitle>
+          <DialogDescription>
+            Будут безвозвратно удалены штабель и вся его история: поступления, подачи в переработку и планы смен.
+            Это повлияет на отчёты по прошлым сменам. Если нужно только скрыть штабель — используйте архив.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor={`confirm-${stockpile.id}`}>Для подтверждения введите название штабеля</Label>
+          <Input
+            id={`confirm-${stockpile.id}`}
+            value={confirmName}
+            onChange={(e) => setConfirmName(e.target.value)}
+            placeholder={stockpile.name}
+            autoComplete="off"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            Отмена
+          </Button>
+          <Button variant="destructive" onClick={handleDelete} disabled={!matches || pending}>
+            {pending ? 'Удаление…' : 'Удалить навсегда'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function StockpileSettings({ stockpiles }: { stockpiles: Stockpile[] }) {
   return (
     <Card>
@@ -168,6 +243,7 @@ export function StockpileSettings({ stockpiles }: { stockpiles: Stockpile[] }) {
                     <div className="flex justify-end gap-1">
                       <StockpileDialog stockpile={s} />
                       <ToggleActiveButton stockpile={s} />
+                    <DeleteStockpileDialog stockpile={s} />
                     </div>
                   </TableCell>
                 </TableRow>

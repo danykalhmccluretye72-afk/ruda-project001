@@ -1,16 +1,21 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useTransition } from 'react'
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
   CalendarClock,
   ClipboardList,
   LayoutGrid,
+  LogOut,
   Mountain,
   Settings,
+  Users,
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { signOut } from '@/lib/auth-client'
 import { cn } from '@/lib/utils'
 
 const links = [
@@ -19,14 +24,31 @@ const links = [
   { href: '/feeds', label: 'Подача в переработку', icon: ArrowUpFromLine },
   { href: '/shifts', label: 'Шихта по сменам', icon: ClipboardList },
   { href: '/planning', label: 'Планирование', icon: CalendarClock },
-  { href: '/settings', label: 'Настройки', icon: Settings },
 ]
 
-export function AppNav() {
+const adminLinks = [
+  { href: '/settings', label: 'Настройки', icon: Settings },
+  { href: '/admin/users', label: 'Пользователи', icon: Users },
+]
+
+type NavUser = { name: string; email: string; isAdmin: boolean }
+
+export function AppNav({ user }: { user: NavUser }) {
   const pathname = usePathname()
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+  const items = user.isAdmin ? [...links, ...adminLinks] : links
+
+  function handleSignOut() {
+    startTransition(async () => {
+      await signOut()
+      router.push('/sign-in')
+      router.refresh()
+    })
+  }
 
   return (
-    <aside className="border-b border-border bg-card md:sticky md:top-0 md:h-dvh md:w-64 md:shrink-0 md:border-b-0 md:border-r">
+    <aside className="flex flex-col border-b border-border bg-card md:sticky md:top-0 md:h-dvh md:w-64 md:shrink-0 md:border-b-0 md:border-r">
       <div className="flex items-center gap-3 px-4 py-4 md:px-6 md:py-6">
         <div className="flex size-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
           <Mountain className="size-5" aria-hidden="true" />
@@ -36,9 +58,9 @@ export function AppNav() {
           <p className="text-xs text-muted-foreground">Учёт остатков руды</p>
         </div>
       </div>
-      <nav aria-label="Основная навигация" className="px-2 pb-3 md:px-3">
+      <nav aria-label="Основная навигация" className="px-2 pb-3 md:flex-1 md:px-3">
         <ul className="flex gap-1 overflow-x-auto md:flex-col">
-          {links.map(({ href, label, icon: Icon }) => {
+          {items.map(({ href, label, icon: Icon }) => {
             const active = href === '/' ? pathname === '/' : pathname.startsWith(href)
             return (
               <li key={href}>
@@ -60,6 +82,24 @@ export function AppNav() {
           })}
         </ul>
       </nav>
+      <div className="flex items-center justify-between gap-2 border-t border-border px-4 py-3 md:px-6 md:py-4">
+        <div className="min-w-0 leading-tight">
+          <p className="truncate text-sm font-medium">{user.name}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {user.isAdmin ? 'Администратор' : 'Оператор'} · {user.email}
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleSignOut}
+          disabled={pending}
+          aria-label="Выйти"
+          title="Выйти"
+        >
+          <LogOut className="size-4" aria-hidden="true" />
+        </Button>
+      </div>
     </aside>
   )
 }
