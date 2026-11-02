@@ -3,8 +3,9 @@ RUN corepack enable
 
 FROM base AS deps
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+# The glob makes the lockfile optional: archives downloaded without it still build.
+COPY package.json pnpm-lock.yaml* ./
+RUN if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else pnpm install; fi
 
 FROM base AS builder
 WORKDIR /app

@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
-import { AppNav } from '@/components/app-nav'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
 
@@ -18,14 +17,9 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ru" className={`dark ${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="ru" className={`dark bg-background ${geistSans.variable} ${geistMono.variable}`}>
       <body className="font-sans antialiased">
-        <div className="flex min-h-dvh flex-col md:flex-row">
-          <AppNav />
-          <main className="flex-1 px-4 py-6 md:px-8 md:py-8">
-            <div className="mx-auto max-w-6xl">{children}</div>
-          </main>
-        </div>
+        {children}
         <Toaster position="top-right" richColors />
       </body>
     </html>

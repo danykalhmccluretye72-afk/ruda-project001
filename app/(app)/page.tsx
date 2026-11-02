@@ -4,9 +4,12 @@ import { PageHeader } from '@/components/page-header'
 import { getBalances, getShiftFeedReport, getShiftPlan } from '@/lib/queries'
 import { getShift } from '@/lib/shift'
 
+import { requireUser } from '@/lib/session'
+
 export const dynamic = 'force-dynamic'
 
 export default async function Page() {
+  await requireUser()
   const shift = getShift(new Date())
   const [balances, report, plan] = await Promise.all([getBalances(), getShiftFeedReport(shift), getShiftPlan(shift)])
 

@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { db } from '@/lib/db'
 import { loaders, oreFeeds, oreReceipts, shiftPlans, stockpiles } from '@/lib/db/schema'
 import { formatShift, getShift, parseShiftKey } from '@/lib/shift'
+import { assertAdmin, assertUser } from '@/lib/session'
 import { formatTons } from '@/lib/utils'
 
 export type ActionState = { ok: boolean; message: string } | null
@@ -67,6 +68,7 @@ const receiptSchema = z.object({
 })
 
 export async function addReceipt(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await assertUser()
   const parsed = receiptSchema.safeParse(Object.fromEntries(formData))
   if (!parsed.success) return fail(parsed.error)
   const data = parsed.data
@@ -85,6 +87,7 @@ export async function addReceipt(_prev: ActionState, formData: FormData): Promis
 }
 
 export async function deleteReceipt(formData: FormData) {
+  await assertUser()
   const id = z.coerce.number().int().positive().parse(formData.get('id'))
   await db.delete(oreReceipts).where(eq(oreReceipts.id, id))
   revalidateAll()
@@ -105,6 +108,7 @@ const feedSchema = z.object({
 })
 
 export async function addFeed(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await assertUser()
   const parsed = feedSchema.safeParse(Object.fromEntries(formData))
   if (!parsed.success) return fail(parsed.error)
   const data = parsed.data
@@ -139,6 +143,7 @@ export async function addFeed(_prev: ActionState, formData: FormData): Promise<A
 }
 
 export async function deleteFeed(formData: FormData) {
+  await assertUser()
   const id = z.coerce.number().int().positive().parse(formData.get('id'))
   await db.delete(oreFeeds).where(eq(oreFeeds.id, id))
   revalidateAll()
@@ -152,6 +157,7 @@ const loaderSchema = z.object({
 })
 
 export async function addLoader(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await assertAdmin()
   const parsed = loaderSchema.safeParse(Object.fromEntries(formData))
   if (!parsed.success) return fail(parsed.error)
   const inserted = await db
@@ -165,6 +171,7 @@ export async function addLoader(_prev: ActionState, formData: FormData): Promise
 }
 
 export async function updateLoader(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await assertAdmin()
   const id = z.coerce.number().int().positive().safeParse(formData.get('id'))
   if (!id.success) return { ok: false, message: 'Погрузчик не найден' }
   const parsed = loaderSchema.safeParse(Object.fromEntries(formData))
@@ -182,6 +189,7 @@ export async function updateLoader(_prev: ActionState, formData: FormData): Prom
 }
 
 export async function toggleLoaderActive(formData: FormData) {
+  await assertAdmin()
   const id = z.coerce.number().int().positive().parse(formData.get('id'))
   const active = formData.get('active') === 'true'
   await db.update(loaders).set({ isActive: active }).where(eq(loaders.id, id))
@@ -199,6 +207,7 @@ const stockpileSchema = z.object({
 })
 
 export async function addStockpile(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await assertAdmin()
   const parsed = stockpileSchema.safeParse(Object.fromEntries(formData))
   if (!parsed.success) return fail(parsed.error)
   const inserted = await db
@@ -216,6 +225,7 @@ export async function addStockpile(_prev: ActionState, formData: FormData): Prom
 }
 
 export async function updateStockpile(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await assertAdmin()
   const id = z.coerce.number().int().positive().safeParse(formData.get('id'))
   if (!id.success) return { ok: false, message: 'Штабель не найден' }
   const parsed = stockpileSchema.safeParse(Object.fromEntries(formData))
@@ -238,6 +248,7 @@ export async function updateStockpile(_prev: ActionState, formData: FormData): P
 }
 
 export async function toggleStockpileActive(formData: FormData) {
+  await assertAdmin()
   const id = z.coerce.number().int().positive().parse(formData.get('id'))
   const active = formData.get('active') === 'true'
   await db.update(stockpiles).set({ isActive: active }).where(eq(stockpiles.id, id))
@@ -251,6 +262,7 @@ const planValue = z.coerce
   .refine((v) => Number.isFinite(v) && v >= 0 && v <= 100000, 'План: от 0 до 100 000 т')
 
 export async function saveShiftPlan(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await assertUser()
   const key = parseShiftKey(String(formData.get('shiftDate') ?? ''), String(formData.get('shiftNo') ?? ''))
   if (!key) return { ok: false, message: 'Некорректная смена' }
 
@@ -289,4 +301,24 @@ export async function saveShiftPlan(_prev: ActionState, formData: FormData): Pro
   revalidateAll()
   const total = filtered.reduce((s, e) => s + e.plannedT, 0)
   return { ok: true, message: `План на ${formatShift(key)} сохранён: ${formatTons(total)} т` }
+}
+
+/* ---------- Полное удаление штабеля ---------- */
+
+export async function deleteStockpile(id: number, confirmName: string): Promise<ActionState> {
+  await assertAdmin()
+  const pileId = z.number().int().positive().safeParse(id)
+  if (!pileId.success) return { ok: false, message: 'Штабель не найден' }
+  const [pile] = await db.select({ name: stockpiles.name }).from(stockpiles).where(eq(stockpiles.id, pileId.data))
+  if (!pile) return { ok: false, message: 'Штабель не найден' }
+  if (confirmName.trim() !== pile.name) return { ok: false, message: 'Название штабеля введено неверно' }
+
+  await db.transaction(async (tx) => {
+    await tx.delete(shiftPlans).where(eq(shiftPlans.stockpileId, pileId.data))
+    await tx.delete(oreFeeds).where(eq(oreFeeds.stockpileId, pileId.data))
+    await tx.delete(oreReceipts).where(eq(oreReceipts.stockpileId, pileId.data))
+    await tx.delete(stockpiles).where(eq(stockpiles.id, pileId.data))
+  })
+  revalidateAll()
+  return { ok: true, message: `Штабель «${pile.name}» и все его записи удалены` }
 }

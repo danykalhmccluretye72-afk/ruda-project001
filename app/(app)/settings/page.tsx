@@ -2,10 +2,12 @@ import { LoaderSettings } from '@/components/loader-settings'
 import { PageHeader } from '@/components/page-header'
 import { StockpileSettings } from '@/components/stockpile-settings'
 import { getLoaders, getStockpiles } from '@/lib/queries'
+import { requireAdminPage } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
 export default async function SettingsPage() {
+  await requireAdminPage()
   const [loaders, piles] = await Promise.all([getLoaders(), getStockpiles()])
 
   return (
