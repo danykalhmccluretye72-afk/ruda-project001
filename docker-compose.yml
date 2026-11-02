@@ -23,6 +23,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://stockyard:${POSTGRES_PASSWORD}@db:5432/stockyard}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Задайте BETTER_AUTH_SECRET в файле .env}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Задайте BETTER_AUTH_URL в файле .env}
+      TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
       TZ: Asia/Vladivostok
     ports:
       - "127.0.0.1:3000:3000"

@@ -35,6 +35,11 @@ export const auth = betterAuth({
       : []),
     ...(process.env.NODE_ENV === 'production'
       ? [
+          // Self-hosted servers are often reachable by several addresses (LAN IP, hostname).
+          ...(process.env.TRUSTED_ORIGINS ?? '')
+            .split(',')
+            .map((origin) => origin.trim())
+            .filter(Boolean),
           ...(process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL}`] : []),
           ...(process.env.VERCEL_PROJECT_PRODUCTION_URL
             ? [`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`]
