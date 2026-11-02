@@ -132,10 +132,14 @@ remove_nginx() {
     $SUDO rm -rf /etc/nginx/sites-enabled/ore-stock /etc/nginx/sites-available/ore-stock
   fi
   env_set COMPOSE_PROFILES caddy
-  if command -v ufw >/dev/null 2>&1 && $SUDO ufw status | grep -q "Status: active"; then
+  start_stack
+}
+
+# Purging nginx also removes its ufw app profile ("Nginx Full"), which silently closes port 80.
+open_web_ports() {
+  if command -v ufw >/dev/null 2>&1 && $SUDO ufw status 2>/dev/null | grep -q "Status: active"; then
     $SUDO ufw allow 80/tcp >/dev/null; $SUDO ufw allow 443/tcp >/dev/null
   fi
-  start_stack
 }
 
 configure_nginx_site() {
@@ -246,6 +250,7 @@ start_stack() {
   wait_db
   migrate
   compose up -d --build --remove-orphans
+  open_web_ports
   local host; host="$(env_get BETTER_AUTH_URL | sed -E 's#^https?://##; s#/.*$##')"
   [ -n "$(env_get TRUSTED_ORIGINS)" ] || set_trusted_origins "$(env_get BETTER_AUTH_URL)"
   if [ "$(env_get COMPOSE_PROFILES)" != "caddy" ] && nginx_installed; then
