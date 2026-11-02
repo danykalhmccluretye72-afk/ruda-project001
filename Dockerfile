@@ -1,5 +1,6 @@
 FROM node:22-alpine AS base
-RUN corepack enable
+# Pinned: pnpm 11 rejects this lockfile under its stricter default install policies.
+RUN corepack enable && corepack prepare pnpm@10.34.3 --activate
 
 FROM base AS deps
 WORKDIR /app
