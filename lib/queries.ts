@@ -1,8 +1,8 @@
 import 'server-only'
-import { and, asc, desc, eq, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm'
 import { db } from './db'
-import { loaders, oreFeeds, oreReceipts, shiftPlans, stockpiles } from './db/schema'
-import type { ShiftKey, ShiftNo } from './shift'
+import { crushingLines, crushingOps, loaders, oreFeeds, oreReceipts, shiftPlans, stockpiles } from './db/schema'
+import { shiftBounds, type ShiftKey, type ShiftNo } from './shift'
 
 export type Stockpile = {
   id: number
@@ -41,15 +41,21 @@ export async function getLoaders(options: { activeOnly?: boolean } = {}): Promis
 export type StockpileBalance = Stockpile & {
   received: number
   fed: number
+  crushedIn: number
+  crushedOut: number
   balance: number
 }
 
-export async function getBalances(): Promise<StockpileBalance[]> {
-  const [piles, receiptTotals, feedTotals] = await Promise.all([
+const crushLineTonnage = sql<string>`coalesce(sum(${crushingLines.bucketCount} * ${crushingOps.bucketWeightT}), 0)`
+
+/** Остатки по штабелям. `until` — учитывать только движения строго раньше этого момента. */
+export async function getBalances(until?: Date): Promise<StockpileBalance[]> {
+  const [piles, receiptTotals, feedTotals, crushInTotals, crushOutTotals] = await Promise.all([
     getStockpiles(),
     db
       .select({ stockpileId: oreReceipts.stockpileId, total: sql<string>`coalesce(sum(${oreReceipts.netWeightT}), 0)` })
       .from(oreReceipts)
+      .where(until ? lt(oreReceipts.occurredAt, until) : undefined)
       .groupBy(oreReceipts.stockpileId),
     db
       .select({
@@ -57,16 +63,136 @@ export async function getBalances(): Promise<StockpileBalance[]> {
         total: sql<string>`coalesce(sum(${oreFeeds.bucketCount} * ${oreFeeds.bucketWeightT}), 0)`,
       })
       .from(oreFeeds)
+      .where(until ? lt(oreFeeds.occurredAt, until) : undefined)
       .groupBy(oreFeeds.stockpileId),
+    db
+      .select({ stockpileId: crushingOps.targetStockpileId, total: crushLineTonnage })
+      .from(crushingLines)
+      .innerJoin(crushingOps, eq(crushingOps.id, crushingLines.opId))
+      .where(until ? lt(crushingOps.occurredAt, until) : undefined)
+      .groupBy(crushingOps.targetStockpileId),
+    db
+      .select({ stockpileId: crushingLines.sourceStockpileId, total: crushLineTonnage })
+      .from(crushingLines)
+      .innerJoin(crushingOps, eq(crushingOps.id, crushingLines.opId))
+      .where(until ? lt(crushingOps.occurredAt, until) : undefined)
+      .groupBy(crushingLines.sourceStockpileId),
   ])
 
-  const receivedMap = new Map(receiptTotals.map((r) => [r.stockpileId, Number(r.total)]))
-  const fedMap = new Map(feedTotals.map((r) => [r.stockpileId, Number(r.total)]))
+  const toMap = (rows: { stockpileId: number; total: string }[]) =>
+    new Map(rows.map((r) => [r.stockpileId, Number(r.total)]))
+  const receivedMap = toMap(receiptTotals)
+  const fedMap = toMap(feedTotals)
+  const inMap = toMap(crushInTotals)
+  const outMap = toMap(crushOutTotals)
 
   return piles.map((p) => {
     const received = receivedMap.get(p.id) ?? 0
     const fed = fedMap.get(p.id) ?? 0
-    return { ...p, received, fed, balance: p.initialTonnage + received - fed }
+    const crushedIn = inMap.get(p.id) ?? 0
+    const crushedOut = outMap.get(p.id) ?? 0
+    return {
+      ...p,
+      received,
+      fed,
+      crushedIn,
+      crushedOut,
+      balance: p.initialTonnage + received + crushedIn - fed - crushedOut,
+    }
+  })
+}
+
+export type ShiftBalanceRow = {
+  id: number
+  name: string
+  isActive: boolean
+  auGrade: number
+  opening: number
+  received: number
+  crushedIn: number
+  crushedOut: number
+  fed: number
+  closing: number
+}
+
+/** Остаток на начало и конец смены и движение за смену. */
+export async function getShiftBalanceReport(key: ShiftKey): Promise<ShiftBalanceRow[]> {
+  const { start, end } = shiftBounds(key)
+  const [opening, closing] = await Promise.all([getBalances(start), getBalances(end)])
+  const openMap = new Map(opening.map((b) => [b.id, b]))
+  return closing.map((c) => {
+    const o = openMap.get(c.id)
+    return {
+      id: c.id,
+      name: c.name,
+      isActive: c.isActive,
+      auGrade: c.auGrade,
+      opening: o?.balance ?? c.initialTonnage,
+      received: c.received - (o?.received ?? 0),
+      crushedIn: c.crushedIn - (o?.crushedIn ?? 0),
+      crushedOut: c.crushedOut - (o?.crushedOut ?? 0),
+      fed: c.fed - (o?.fed ?? 0),
+      closing: c.balance,
+    }
+  })
+}
+
+export async function getRecentCrushing(limit = 50) {
+  const ops = await db
+    .select({
+      id: crushingOps.id,
+      occurredAt: crushingOps.occurredAt,
+      shiftDate: crushingOps.shiftDate,
+      shiftNo: crushingOps.shiftNo,
+      targetName: stockpiles.name,
+      loaderName: sql<string | null>`coalesce(${loaders.name}, ${crushingOps.loader})`,
+      bucketWeightT: crushingOps.bucketWeightT,
+      note: crushingOps.note,
+    })
+    .from(crushingOps)
+    .leftJoin(stockpiles, eq(stockpiles.id, crushingOps.targetStockpileId))
+    .leftJoin(loaders, eq(loaders.id, crushingOps.loaderId))
+    .orderBy(desc(crushingOps.occurredAt), desc(crushingOps.id))
+    .limit(limit)
+  if (ops.length === 0) return []
+
+  const lines = await db
+    .select({
+      opId: crushingLines.opId,
+      sourceName: stockpiles.name,
+      bucketCount: crushingLines.bucketCount,
+      auGrade: crushingLines.auGrade,
+    })
+    .from(crushingLines)
+    .leftJoin(stockpiles, eq(stockpiles.id, crushingLines.sourceStockpileId))
+    .where(inArray(crushingLines.opId, ops.map((o) => o.id)))
+    .orderBy(asc(crushingLines.id))
+
+  return ops.map((op) => {
+    const bucketWeightT = Number(op.bucketWeightT)
+    const sources = lines
+      .filter((l) => l.opId === op.id)
+      .map((l) => ({
+        name: l.sourceName ?? '—',
+        buckets: l.bucketCount,
+        tonnage: l.bucketCount * bucketWeightT,
+        auGrade: Number(l.auGrade),
+      }))
+    const tonnage = sources.reduce((s, l) => s + l.tonnage, 0)
+    const metal = sources.reduce((s, l) => s + l.tonnage * l.auGrade, 0)
+    return {
+      id: op.id,
+      occurredAt: op.occurredAt.toISOString(),
+      shiftNo: op.shiftNo,
+      targetName: op.targetName ?? '—',
+      loaderName: op.loaderName,
+      bucketWeightT,
+      note: op.note,
+      sources,
+      buckets: sources.reduce((s, l) => s + l.buckets, 0),
+      tonnage,
+      grade: tonnage > 0 ? metal / tonnage : 0,
+    }
   })
 }
 

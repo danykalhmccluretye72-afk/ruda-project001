@@ -49,6 +49,27 @@ export const oreFeeds = pgTable('ore_feeds', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+export const crushingOps = pgTable('crushing_ops', {
+  id: serial('id').primaryKey(),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+  shiftDate: date('shift_date').notNull(),
+  shiftNo: smallint('shift_no').notNull(),
+  targetStockpileId: integer('target_stockpile_id').notNull(),
+  loaderId: integer('loader_id'),
+  loader: text('loader'),
+  bucketWeightT: numeric('bucket_weight_t', { precision: 10, scale: 3 }).notNull(),
+  note: text('note'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const crushingLines = pgTable('crushing_lines', {
+  id: serial('id').primaryKey(),
+  opId: integer('op_id').notNull(),
+  sourceStockpileId: integer('source_stockpile_id').notNull(),
+  bucketCount: integer('bucket_count').notNull(),
+  auGrade: numeric('au_grade', { precision: 10, scale: 3 }).notNull().default('0'),
+})
+
 export const shiftPlans = pgTable(
   'shift_plans',
   {

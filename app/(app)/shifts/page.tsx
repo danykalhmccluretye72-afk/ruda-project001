@@ -8,12 +8,12 @@ import { getShiftFeedReport, getShiftHistory, getShiftPlan, getStockpiles } from
 import { formatShiftDate, getShift, parseShiftKey, shiftHours, shiftHref } from '@/lib/shift'
 import { formatGrade, formatMetal, formatPercent, formatTons } from '@/lib/utils'
 
-import { requireUser } from '@/lib/session'
+import { requireOperatorPage } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ShiftsPage({ searchParams }: { searchParams: Promise<{ date?: string; shift?: string }> }) {
-  await requireUser()
+  await requireOperatorPage()
   const params = await searchParams
   const current = getShift(new Date())
   const selected = parseShiftKey(params.date, params.shift) ?? current

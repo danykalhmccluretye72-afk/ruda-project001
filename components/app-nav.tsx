@@ -8,6 +8,8 @@ import {
   ArrowUpFromLine,
   CalendarClock,
   ClipboardList,
+  FileSpreadsheet,
+  Hammer,
   LayoutGrid,
   LogOut,
   Mountain,
@@ -16,28 +18,28 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { signOut } from '@/lib/auth-client'
+import { ROLE_LABELS, type Role } from '@/lib/roles'
 import { cn } from '@/lib/utils'
 
-const links = [
-  { href: '/', label: 'Остатки', icon: LayoutGrid },
-  { href: '/receipts', label: 'Поступление', icon: ArrowDownToLine },
-  { href: '/feeds', label: 'Подача в переработку', icon: ArrowUpFromLine },
-  { href: '/shifts', label: 'Шихта по сменам', icon: ClipboardList },
-  { href: '/planning', label: 'Планирование', icon: CalendarClock },
+const links: { href: string; label: string; icon: typeof LayoutGrid; roles: Role[] }[] = [
+  { href: '/', label: 'Остатки', icon: LayoutGrid, roles: ['info', 'user', 'admin'] },
+  { href: '/receipts', label: 'Поступление', icon: ArrowDownToLine, roles: ['user', 'admin'] },
+  { href: '/feeds', label: 'Подача в переработку', icon: ArrowUpFromLine, roles: ['user', 'admin'] },
+  { href: '/crushing', label: 'Дробление', icon: Hammer, roles: ['user', 'admin'] },
+  { href: '/shifts', label: 'Шихта по сменам', icon: ClipboardList, roles: ['user', 'admin'] },
+  { href: '/planning', label: 'Планирование', icon: CalendarClock, roles: ['user', 'admin'] },
+  { href: '/reports', label: 'Отчёты', icon: FileSpreadsheet, roles: ['user', 'admin'] },
+  { href: '/settings', label: 'Настройки', icon: Settings, roles: ['user', 'admin'] },
+  { href: '/admin/users', label: 'Пользователи', icon: Users, roles: ['admin'] },
 ]
 
-const adminLinks = [
-  { href: '/settings', label: 'Настройки', icon: Settings },
-  { href: '/admin/users', label: 'Пользователи', icon: Users },
-]
-
-type NavUser = { name: string; email: string; isAdmin: boolean }
+type NavUser = { name: string; email: string; role: Role }
 
 export function AppNav({ user }: { user: NavUser }) {
   const pathname = usePathname()
   const router = useRouter()
   const [pending, startTransition] = useTransition()
-  const items = user.isAdmin ? [...links, ...adminLinks] : links
+  const items = links.filter((l) => l.roles.includes(user.role))
 
   function handleSignOut() {
     startTransition(async () => {
@@ -86,7 +88,7 @@ export function AppNav({ user }: { user: NavUser }) {
         <div className="min-w-0 leading-tight">
           <p className="truncate text-sm font-medium">{user.name}</p>
           <p className="truncate text-xs text-muted-foreground">
-            {user.isAdmin ? 'Администратор' : 'Оператор'} · {user.email}
+            {ROLE_LABELS[user.role]} · {user.email}
           </p>
         </div>
         <Button

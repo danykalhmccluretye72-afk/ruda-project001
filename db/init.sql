@@ -59,6 +59,32 @@ CREATE TABLE IF NOT EXISTS shift_plans (
   UNIQUE (shift_date, shift_no, stockpile_id)
 );
 
+-- Дробление: перемещение руды из одного или нескольких штабелей в целевой (учёт ковшами)
+CREATE TABLE IF NOT EXISTS crushing_ops (
+  id serial PRIMARY KEY,
+  occurred_at timestamptz NOT NULL DEFAULT now(),
+  shift_date date NOT NULL,
+  shift_no smallint NOT NULL,
+  target_stockpile_id integer NOT NULL,
+  loader_id integer,
+  loader text,
+  bucket_weight_t numeric(10,3) NOT NULL,
+  note text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS crushing_lines (
+  id serial PRIMARY KEY,
+  op_id integer NOT NULL REFERENCES crushing_ops(id) ON DELETE CASCADE,
+  source_stockpile_id integer NOT NULL,
+  bucket_count integer NOT NULL,
+  au_grade numeric(10,3) NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS crushing_ops_target_time_idx ON crushing_ops (target_stockpile_id, occurred_at);
+CREATE INDEX IF NOT EXISTS crushing_lines_op_idx ON crushing_lines (op_id);
+CREATE INDEX IF NOT EXISTS crushing_lines_source_idx ON crushing_lines (source_stockpile_id);
+
 CREATE INDEX IF NOT EXISTS ore_feeds_stockpile_time_idx ON ore_feeds (stockpile_id, occurred_at);
 CREATE INDEX IF NOT EXISTS ore_feeds_shift_idx ON ore_feeds (shift_date, shift_no);
 CREATE INDEX IF NOT EXISTS ore_receipts_stockpile_time_idx ON ore_receipts (stockpile_id, occurred_at);

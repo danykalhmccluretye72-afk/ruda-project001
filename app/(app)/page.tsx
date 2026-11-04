@@ -1,26 +1,44 @@
 import { BalanceSummary } from '@/components/balance-summary'
 import { BalanceTable } from '@/components/balance-table'
 import { PageHeader } from '@/components/page-header'
+import { ShiftTrio } from '@/components/shift-trio'
 import { getBalances, getShiftFeedReport, getShiftPlan } from '@/lib/queries'
-import { getShift } from '@/lib/shift'
-
+import { canEdit } from '@/lib/roles'
 import { requireUser } from '@/lib/session'
+import { getShift, nextShift, prevShift } from '@/lib/shift'
 
 export const dynamic = 'force-dynamic'
 
 export default async function Page() {
-  await requireUser()
-  const shift = getShift(new Date())
-  const [balances, report, plan] = await Promise.all([getBalances(), getShiftFeedReport(shift), getShiftPlan(shift)])
+  const user = await requireUser()
+  const current = getShift(new Date())
+  const prev = prevShift(current)
+  const next = nextShift(current)
+  const [balances, prevReport, report, prevPlan, plan, nextPlan] = await Promise.all([
+    getBalances(),
+    getShiftFeedReport(prev),
+    getShiftFeedReport(current),
+    getShiftPlan(prev),
+    getShiftPlan(current),
+    getShiftPlan(next),
+  ])
 
   return (
     <>
       <PageHeader
         title="Остатки руды по штабелям"
-        description="Остаток = исходный остаток + поступление (автовесовая) − подача в переработку (ковши погрузчика)."
+        description="Остаток = поступление (автовесовая) ± дробление − подача в переработку (ковши погрузчика)."
       />
-      <BalanceSummary balances={balances} shift={shift} report={report} plan={plan} />
-      <BalanceTable balances={balances} />
+      <BalanceSummary balances={balances} shift={current} report={report} plan={plan} />
+      <ShiftTrio
+        balances={balances}
+        columns={[
+          { key: prev, kind: 'prev', plan: prevPlan, report: prevReport },
+          { key: current, kind: 'current', plan, report },
+          { key: next, kind: 'next', plan: nextPlan, report: null },
+        ]}
+      />
+      <BalanceTable balances={balances} canEdit={canEdit(user.role)} />
     </>
   )
 }

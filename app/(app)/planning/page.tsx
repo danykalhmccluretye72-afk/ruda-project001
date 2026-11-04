@@ -4,12 +4,12 @@ import { ShiftPicker } from '@/components/shift-picker'
 import { getBalances, getLoaders, getShiftFeedReport, getShiftPlan } from '@/lib/queries'
 import { getShift, parseShiftKey } from '@/lib/shift'
 
-import { requireUser } from '@/lib/session'
+import { requireOperatorPage } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
 export default async function PlanningPage({ searchParams }: { searchParams: Promise<{ date?: string; shift?: string }> }) {
-  await requireUser()
+  await requireOperatorPage()
   const params = await searchParams
   const current = getShift(new Date())
   const selected = parseShiftKey(params.date, params.shift) ?? current
