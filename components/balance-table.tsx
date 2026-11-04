@@ -11,9 +11,8 @@ function signed(value: number) {
   return formatTons(0)
 }
 
-export function BalanceTable({ balances, canEdit }: { balances: StockpileBalance[]; canEdit: boolean }) {
-  const max = Math.max(1, ...balances.map((b) => b.balance))
-  const totals = balances.reduce(
+function sumBalances(rows: StockpileBalance[]) {
+  return rows.reduce(
     (acc, b) => ({
       received: acc.received + b.received,
       crushed: acc.crushed + b.crushedIn - b.crushedOut,
@@ -24,6 +23,31 @@ export function BalanceTable({ balances, canEdit }: { balances: StockpileBalance
     }),
     { received: 0, crushed: 0, fed: 0, balance: 0, positive: 0, metal: 0 },
   )
+}
+
+function TotalsCells({ totals }: { totals: ReturnType<typeof sumBalances> }) {
+  return (
+    <>
+      <TableCell className="text-right font-mono font-semibold tabular-nums">{formatTons(totals.balance)}</TableCell>
+      <TableCell className="text-right font-mono tabular-nums">
+        {formatGrade(totals.positive > 0 ? totals.metal / totals.positive : 0)}
+      </TableCell>
+      <TableCell className="text-right font-mono tabular-nums">{formatMetal(totals.metal)}</TableCell>
+      <TableCell className="text-right font-mono tabular-nums">{signed(totals.received)}</TableCell>
+      <TableCell className="text-right font-mono tabular-nums">{signed(totals.crushed)}</TableCell>
+      <TableCell className="text-right font-mono tabular-nums">{signed(-totals.fed)}</TableCell>
+      <TableCell className="hidden lg:table-cell" />
+    </>
+  )
+}
+
+export function BalanceTable({ balances, canEdit }: { balances: StockpileBalance[]; canEdit: boolean }) {
+  const max = Math.max(1, ...balances.map((b) => b.balance))
+  const totals = sumBalances(balances)
+  const groups = [
+    { key: 'active', title: 'Активные штабели', rows: balances.filter((b) => b.isActive) },
+    { key: 'archived', title: 'Архивные штабели', rows: balances.filter((b) => !b.isActive) },
+  ].filter((g) => g.rows.length > 0)
 
   return (
     <Card>
@@ -61,8 +85,14 @@ export function BalanceTable({ balances, canEdit }: { balances: StockpileBalance
                 </TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
-              {balances.map((b) => {
+            {groups.map((group) => (
+            <TableBody key={group.key} className="[&_tr:last-child]:border-b">
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableCell colSpan={8} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {group.title}
+                </TableCell>
+              </TableRow>
+              {group.rows.map((b) => {
                 const crushed = b.crushedIn - b.crushedOut
                 return (
                   <TableRow key={b.id} className={cn(!b.isActive && 'opacity-60')}>
@@ -110,19 +140,18 @@ export function BalanceTable({ balances, canEdit }: { balances: StockpileBalance
                   </TableRow>
                 )
               })}
+              <TableRow className="hover:bg-transparent">
+                <TableCell className="font-semibold">
+                  Итого {group.key === 'active' ? 'по активным' : 'по архивным'}
+                </TableCell>
+                <TotalsCells totals={sumBalances(group.rows)} />
+              </TableRow>
             </TableBody>
+            ))}
             <TableFooter>
               <TableRow>
-                <TableCell className="font-semibold">Итого</TableCell>
-                <TableCell className="text-right font-mono font-semibold tabular-nums">{formatTons(totals.balance)}</TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
-                  {formatGrade(totals.positive > 0 ? totals.metal / totals.positive : 0)}
-                </TableCell>
-                <TableCell className="text-right font-mono tabular-nums">{formatMetal(totals.metal)}</TableCell>
-                <TableCell className="text-right font-mono tabular-nums">{signed(totals.received)}</TableCell>
-                <TableCell className="text-right font-mono tabular-nums">{signed(totals.crushed)}</TableCell>
-                <TableCell className="text-right font-mono tabular-nums">{signed(-totals.fed)}</TableCell>
-                <TableCell className="hidden lg:table-cell" />
+                <TableCell className="font-semibold">Итого общее</TableCell>
+                <TotalsCells totals={totals} />
               </TableRow>
             </TableFooter>
           </Table>
