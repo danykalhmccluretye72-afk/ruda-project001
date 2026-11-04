@@ -40,6 +40,24 @@ export function prevShift({ date, shift }: ShiftKey): ShiftKey {
   return shift === 2 ? { date, shift: 1 } : { date: addDays(date, -1), shift: 2 }
 }
 
+export const MAX_BATCH_DAYS = 93
+
+/** Все смены в диапазоне дат (включительно) с выбранными номерами смен */
+export function shiftsInRange(from: string, to: string, shifts: ShiftNo[]): ShiftKey[] {
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/
+  if (!dateRe.test(from) || !dateRe.test(to) || from > to || shifts.length === 0) return []
+  const result: ShiftKey[] = []
+  const sorted = [...new Set(shifts)].sort()
+  for (let d = from, i = 0; d <= to && i < MAX_BATCH_DAYS; d = addDays(d, 1), i++) {
+    for (const s of sorted) result.push({ date: d, shift: s })
+  }
+  return result
+}
+
+export function shiftDateOffset(date: string, days: number) {
+  return addDays(date, days)
+}
+
 export function shiftHours(shift: ShiftNo) {
   return shift === 1 ? '19:00–07:00' : '07:00–19:00'
 }

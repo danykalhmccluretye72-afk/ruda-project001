@@ -37,7 +37,7 @@ export default async function PlanningPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader
         title="Планирование шихты"
-        description="Распределите тоннаж по штабелям на смену — содержание шихты и количество ковшей рассчитываются автоматически."
+        description="Распределите тоннаж по штабелям или задайте пропорции на смену, при необходимости примените план на период — содержание шихты и количество ковшей рассчитываются автоматически."
       />
       <div className="mb-6">
         <ShiftPicker path="/planning" value={selected} current={current} />

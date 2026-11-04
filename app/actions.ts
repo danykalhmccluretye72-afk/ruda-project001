@@ -1,11 +1,21 @@
 'use server'
 
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { crushingLines, crushingOps, loaders, oreFeeds, oreReceipts, shiftPlans, stockpiles } from '@/lib/db/schema'
-import { formatShift, fromKhvInputValue, getShift, parseShiftKey } from '@/lib/shift'
+import {
+  MAX_BATCH_DAYS,
+  formatShift,
+  formatShiftDate,
+  fromKhvInputValue,
+  getShift,
+  parseShiftKey,
+  shiftDateOffset,
+  shiftsInRange,
+  type ShiftNo,
+} from '@/lib/shift'
 import { assertOperator } from '@/lib/session'
 import { formatTons } from '@/lib/utils'
 
@@ -262,28 +272,35 @@ const planValue = z.coerce
   .number({ message: 'План: введите число' })
   .refine((v) => Number.isFinite(v) && v >= 0 && v <= 100000, 'План: от 0 до 100 000 т')
 
-export async function saveShiftPlan(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  await assertOperator()
-  const key = parseShiftKey(String(formData.get('shiftDate') ?? ''), String(formData.get('shiftNo') ?? ''))
-  if (!key) return { ok: false, message: 'Некорректная смена' }
+type PlanEntry = { stockpileId: number; plannedT: number }
 
-  const entries: { stockpileId: number; plannedT: number }[] = []
+async function parsePlanEntries(formData: FormData): Promise<{ entries: PlanEntry[] } | { error: ActionState }> {
+  const entries: PlanEntry[] = []
   for (const [name, raw] of formData.entries()) {
     if (!name.startsWith('plan_')) continue
     const stockpileId = Number(name.slice(5))
     if (!Number.isInteger(stockpileId) || stockpileId <= 0) continue
     const text = String(raw).trim().replace(',', '.')
     const parsed = planValue.safeParse(text === '' ? 0 : text)
-    if (!parsed.success) return fail(parsed.error)
+    if (!parsed.success) return { error: fail(parsed.error) }
     entries.push({ stockpileId, plannedT: parsed.data })
   }
-
   const ids = entries.map((e) => e.stockpileId)
   const valid = ids.length
     ? await db.select({ id: stockpiles.id }).from(stockpiles).where(inArray(stockpiles.id, ids))
     : []
   const validIds = new Set(valid.map((v) => v.id))
-  const filtered = entries.filter((e) => validIds.has(e.stockpileId))
+  return { entries: entries.filter((e) => validIds.has(e.stockpileId)) }
+}
+
+export async function saveShiftPlan(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await assertOperator()
+  const key = parseShiftKey(String(formData.get('shiftDate') ?? ''), String(formData.get('shiftNo') ?? ''))
+  if (!key) return { ok: false, message: 'Некорректная смена' }
+
+  const parsedEntries = await parsePlanEntries(formData)
+  if ('error' in parsedEntries) return parsedEntries.error
+  const filtered = parsedEntries.entries
 
   await db.transaction(async (tx) => {
     await tx
@@ -302,6 +319,64 @@ export async function saveShiftPlan(_prev: ActionState, formData: FormData): Pro
   revalidateAll()
   const total = filtered.reduce((s, e) => s + e.plannedT, 0)
   return { ok: true, message: `План на ${formatShift(key)} сохранён: ${formatTons(total)} т` }
+}
+
+export async function saveBatchShiftPlan(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await assertOperator()
+  const from = String(formData.get('batchFrom') ?? '')
+  const to = String(formData.get('batchTo') ?? '')
+  const shiftNos = formData
+    .getAll('batchShift')
+    .map(String)
+    .filter((s) => s === '1' || s === '2')
+    .map((s) => Number(s) as ShiftNo)
+  const overwrite = formData.get('batchOverwrite') === 'on'
+
+  if (!parseShiftKey(from, '1') || !parseShiftKey(to, '1')) return { ok: false, message: 'Укажите даты периода' }
+  if (from > to) return { ok: false, message: 'Дата начала позже даты окончания' }
+  if (shiftNos.length === 0) return { ok: false, message: 'Выберите хотя бы одну смену' }
+  if (shiftDateOffset(from, MAX_BATCH_DAYS - 1) < to) {
+    return { ok: false, message: `Период не может превышать ${MAX_BATCH_DAYS} дн.` }
+  }
+
+  const targets = shiftsInRange(from, to, shiftNos)
+  const parsedEntries = await parsePlanEntries(formData)
+  if ('error' in parsedEntries) return parsedEntries.error
+  const entries = parsedEntries.entries.filter((e) => e.plannedT > 0)
+  if (entries.length === 0) return { ok: false, message: 'План пуст — заполните тоннаж или доли' }
+
+  const existing = await db
+    .selectDistinct({ date: shiftPlans.shiftDate, shift: shiftPlans.shiftNo })
+    .from(shiftPlans)
+    .where(and(gte(shiftPlans.shiftDate, from), lte(shiftPlans.shiftDate, to)))
+  const existingKeys = new Set(existing.map((e) => `${e.date}|${e.shift}`))
+  const toWrite = overwrite ? targets : targets.filter((t) => !existingKeys.has(`${t.date}|${t.shift}`))
+  if (toWrite.length === 0) {
+    return { ok: false, message: 'На все выбранные смены план уже задан. Включите «Перезаписать».' }
+  }
+
+  await db.transaction(async (tx) => {
+    for (const t of toWrite) {
+      await tx.delete(shiftPlans).where(and(eq(shiftPlans.shiftDate, t.date), eq(shiftPlans.shiftNo, t.shift)))
+    }
+    await tx.insert(shiftPlans).values(
+      toWrite.flatMap((t) =>
+        entries.map((e) => ({
+          shiftDate: t.date,
+          shiftNo: t.shift,
+          stockpileId: e.stockpileId,
+          plannedT: e.plannedT.toFixed(3),
+        })),
+      ),
+    )
+  })
+  revalidateAll()
+  const perShift = entries.reduce((s, e) => s + e.plannedT, 0)
+  const skipped = targets.length - toWrite.length
+  return {
+    ok: true,
+    message: `План записан на ${toWrite.length} смен (${formatShiftDate(from)}–${formatShiftDate(to)}): ${formatTons(perShift * toWrite.length)} т${skipped ? `, пропущено ${skipped} смен с существующим планом` : ''}`,
+  }
 }
 
 /* ---------- Полное удаление штабеля ---------- */
