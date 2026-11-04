@@ -418,7 +418,12 @@ export async function getKirankanStockpiles(): Promise<KirankanStockpile[]> {
 }
 
 async function kirankanTotals(from?: Date, to?: Date) {
-  const range = (col: typeof kirankanReceipts.occurredAt) =>
+  const range = (
+    col:
+      | typeof kirankanReceipts.occurredAt
+      | typeof kirankanShipments.occurredAt
+      | typeof kirankanAdjustments.occurredAt,
+  ) =>
     and(from ? gte(col, from) : undefined, to ? lt(col, to) : undefined)
   const [receipts, shipments, adjustments] = await Promise.all([
     db
