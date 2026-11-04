@@ -387,8 +387,9 @@ export async function getRecentFeeds(limit = 100) {
 
 /** Current balances with movement columns limited to the given (current) shift. */
 export async function getCurrentShiftBalances(key: ShiftKey): Promise<StockpileBalance[]> {
-  const { start } = shiftBounds(key)
-  const [now, opening] = await Promise.all([getBalances(), getBalances(start)])
+  const { start, end } = shiftBounds(key)
+  const until = end.getTime() > Date.now() ? undefined : end
+  const [now, opening] = await Promise.all([getBalances(until), getBalances(start)])
   const openingById = new Map(opening.map((b) => [b.id, b]))
   return now.map((b) => {
     const o = openingById.get(b.id)
@@ -416,22 +417,24 @@ export async function getKirankanStockpiles(): Promise<KirankanStockpile[]> {
   return rows.map((r) => ({ id: r.id, name: r.name, auGrade: Number(r.auGrade) }))
 }
 
-async function kirankanTotals(from?: Date) {
+async function kirankanTotals(from?: Date, to?: Date) {
+  const range = (col: typeof kirankanReceipts.occurredAt) =>
+    and(from ? gte(col, from) : undefined, to ? lt(col, to) : undefined)
   const [receipts, shipments, adjustments] = await Promise.all([
     db
       .select({ stockpileId: kirankanReceipts.stockpileId, total: sql<string>`coalesce(sum(${kirankanReceipts.netWeightT}), 0)` })
       .from(kirankanReceipts)
-      .where(from ? gte(kirankanReceipts.occurredAt, from) : undefined)
+      .where(range(kirankanReceipts.occurredAt))
       .groupBy(kirankanReceipts.stockpileId),
     db
       .select({ stockpileId: kirankanShipments.stockpileId, total: sql<string>`coalesce(sum(${kirankanShipments.netWeightT}), 0)` })
       .from(kirankanShipments)
-      .where(from ? gte(kirankanShipments.occurredAt, from) : undefined)
+      .where(range(kirankanShipments.occurredAt))
       .groupBy(kirankanShipments.stockpileId),
     db
       .select({ stockpileId: kirankanAdjustments.stockpileId, total: sql<string>`coalesce(sum(${kirankanAdjustments.deltaT}), 0)` })
       .from(kirankanAdjustments)
-      .where(from ? gte(kirankanAdjustments.occurredAt, from) : undefined)
+      .where(range(kirankanAdjustments.occurredAt))
       .groupBy(kirankanAdjustments.stockpileId),
   ])
   const toMap = (rows: { stockpileId: number; total: string }[]) =>
@@ -441,8 +444,13 @@ async function kirankanTotals(from?: Date) {
 
 /** Kirankan balances: balance is current; received/shipped/adjusted are the current shift's movement. */
 export async function getKirankanBalances(key: ShiftKey): Promise<KirankanBalance[]> {
-  const { start } = shiftBounds(key)
-  const [piles, all, shift] = await Promise.all([getKirankanStockpiles(), kirankanTotals(), kirankanTotals(start)])
+  const { start, end } = shiftBounds(key)
+  const until = end.getTime() > Date.now() ? undefined : end
+  const [piles, all, shift] = await Promise.all([
+    getKirankanStockpiles(),
+    kirankanTotals(undefined, until),
+    kirankanTotals(start, until),
+  ])
   return piles.map((p) => ({
     ...p,
     received: shift.received.get(p.id) ?? 0,

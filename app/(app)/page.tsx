@@ -2,6 +2,7 @@ import { BalanceSummary } from '@/components/balance-summary'
 import { BalanceTable } from '@/components/balance-table'
 import { KirankanBalanceTable } from '@/components/kirankan-balance-table'
 import { PageHeader } from '@/components/page-header'
+import { ShiftPicker } from '@/components/shift-picker'
 import { ShiftTrio } from '@/components/shift-trio'
 import {
   getCurrentShiftBalances,
@@ -11,13 +12,16 @@ import {
 } from '@/lib/queries'
 import { canEdit, canManageKirankan } from '@/lib/roles'
 import { requireUser } from '@/lib/session'
-import { getShift, nextShift, prevShift } from '@/lib/shift'
+import { getShift, nextShift, parseShiftKey, prevShift } from '@/lib/shift'
 
 export const dynamic = 'force-dynamic'
 
-export default async function Page() {
+export default async function Page({ searchParams }: { searchParams: Promise<{ date?: string; shift?: string }> }) {
   const user = await requireUser()
-  const current = getShift(new Date())
+  const params = await searchParams
+  const now = getShift(new Date())
+  const current = parseShiftKey(params.date, params.shift) ?? now
+  const isNow = current.date === now.date && current.shift === now.shift
   const prev = prevShift(current)
   const next = nextShift(current)
   const [balances, kirankan, prevReport, report, prevPlan, plan, nextPlan] = await Promise.all([
@@ -36,6 +40,9 @@ export default async function Page() {
         title="Остатки руды по штабелям"
         description="Остаток = поступление (автовесовая) ± дробление − подача в переработку (ковши погрузчика)."
       />
+      <div className="mb-6">
+        <ShiftPicker path="/" value={current} current={now} />
+      </div>
       <BalanceSummary balances={balances} shift={current} report={report} plan={plan} />
       <ShiftTrio
         balances={balances}
@@ -45,8 +52,8 @@ export default async function Page() {
           { key: next, kind: 'next', plan: nextPlan, report: null },
         ]}
       />
-      <BalanceTable balances={balances} canEdit={canEdit(user.role)} />
-      <KirankanBalanceTable balances={kirankan} canManage={canManageKirankan(user.role)} />
+      <BalanceTable balances={balances} canEdit={isNow && canEdit(user.role)} />
+      <KirankanBalanceTable balances={kirankan} canManage={isNow && canManageKirankan(user.role)} />
     </>
   )
 }
