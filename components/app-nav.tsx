@@ -14,6 +14,7 @@ import {
   LogOut,
   Mountain,
   Settings,
+  Truck,
   Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -22,7 +23,8 @@ import { ROLE_LABELS, type Role } from '@/lib/roles'
 import { cn } from '@/lib/utils'
 
 const links: { href: string; label: string; icon: typeof LayoutGrid; roles: Role[] }[] = [
-  { href: '/', label: 'Остатки', icon: LayoutGrid, roles: ['info', 'user', 'admin'] },
+  { href: '/', label: 'Остатки', icon: LayoutGrid, roles: ['info', 'user', 'kirankan', 'admin'] },
+  { href: '/kirankan', label: 'Киранкан', icon: Truck, roles: ['kirankan', 'admin'] },
   { href: '/receipts', label: 'Поступление', icon: ArrowDownToLine, roles: ['user', 'admin'] },
   { href: '/feeds', label: 'Подача в переработку', icon: ArrowUpFromLine, roles: ['user', 'admin'] },
   { href: '/crushing', label: 'Дробление', icon: Hammer, roles: ['user', 'admin'] },

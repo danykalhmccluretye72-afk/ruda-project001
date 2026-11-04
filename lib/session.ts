@@ -2,7 +2,7 @@ import 'server-only'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
-import { normalizeRole } from '@/lib/roles'
+import { canEdit, canManageKirankan, normalizeRole } from '@/lib/roles'
 
 export async function getSession() {
   return auth.api.getSession({ headers: await headers() })
@@ -15,10 +15,23 @@ export async function requireUser() {
   return { ...session.user, role: normalizeRole(session.user.role) }
 }
 
-/** For data-entry pages: the read-only "info" role is sent back to the balances page. */
+/** For Perevalnoe data-entry pages: other roles are sent back to the balances page. */
 export async function requireOperatorPage() {
   const user = await requireUser()
-  if (user.role === 'info') redirect('/')
+  if (!canEdit(user.role)) redirect('/')
+  return user
+}
+
+/** For the Kirankan management page. */
+export async function requireKirankanPage() {
+  const user = await requireUser()
+  if (!canManageKirankan(user.role)) redirect('/')
+  return user
+}
+
+export async function assertKirankan() {
+  const user = await assertUser()
+  if (!canManageKirankan(user.role)) throw new Error('Недостаточно прав')
   return user
 }
 
@@ -38,7 +51,7 @@ export async function assertUser() {
 
 export async function assertOperator() {
   const user = await assertUser()
-  if (user.role === 'info') throw new Error('Недостаточно прав')
+  if (!canEdit(user.role)) throw new Error('Недостаточно прав')
   return user
 }
 

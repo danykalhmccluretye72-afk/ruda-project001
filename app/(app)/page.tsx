@@ -1,9 +1,15 @@
 import { BalanceSummary } from '@/components/balance-summary'
 import { BalanceTable } from '@/components/balance-table'
+import { KirankanBalanceTable } from '@/components/kirankan-balance-table'
 import { PageHeader } from '@/components/page-header'
 import { ShiftTrio } from '@/components/shift-trio'
-import { getBalances, getShiftFeedReport, getShiftPlan } from '@/lib/queries'
-import { canEdit } from '@/lib/roles'
+import {
+  getCurrentShiftBalances,
+  getKirankanBalances,
+  getShiftFeedReport,
+  getShiftPlan,
+} from '@/lib/queries'
+import { canEdit, canManageKirankan } from '@/lib/roles'
 import { requireUser } from '@/lib/session'
 import { getShift, nextShift, prevShift } from '@/lib/shift'
 
@@ -14,8 +20,9 @@ export default async function Page() {
   const current = getShift(new Date())
   const prev = prevShift(current)
   const next = nextShift(current)
-  const [balances, prevReport, report, prevPlan, plan, nextPlan] = await Promise.all([
-    getBalances(),
+  const [balances, kirankan, prevReport, report, prevPlan, plan, nextPlan] = await Promise.all([
+    getCurrentShiftBalances(current),
+    getKirankanBalances(current),
     getShiftFeedReport(prev),
     getShiftFeedReport(current),
     getShiftPlan(prev),
@@ -39,6 +46,7 @@ export default async function Page() {
         ]}
       />
       <BalanceTable balances={balances} canEdit={canEdit(user.role)} />
+      <KirankanBalanceTable balances={kirankan} canManage={canManageKirankan(user.role)} />
     </>
   )
 }

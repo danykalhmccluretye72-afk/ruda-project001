@@ -1,5 +1,5 @@
 import { getShiftBalanceReport } from '@/lib/queries'
-import { normalizeRole } from '@/lib/roles'
+import { canEdit, normalizeRole } from '@/lib/roles'
 import { getSession } from '@/lib/session'
 import { parseShiftKey, shiftHours } from '@/lib/shift'
 
@@ -11,7 +11,7 @@ const cell = (value: string) => `"${value.replace(/"/g, '""')}"`
 export async function GET(request: Request) {
   const session = await getSession()
   if (!session?.user) return new Response('Требуется вход', { status: 401 })
-  if (normalizeRole(session.user.role) === 'info') return new Response('Недостаточно прав', { status: 403 })
+  if (!canEdit(normalizeRole(session.user.role))) return new Response('Недостаточно прав', { status: 403 })
 
   const url = new URL(request.url)
   const key = parseShiftKey(url.searchParams.get('date') ?? undefined, url.searchParams.get('shift') ?? undefined)

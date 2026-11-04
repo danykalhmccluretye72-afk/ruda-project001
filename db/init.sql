@@ -89,5 +89,49 @@ CREATE INDEX IF NOT EXISTS ore_feeds_stockpile_time_idx ON ore_feeds (stockpile_
 CREATE INDEX IF NOT EXISTS ore_feeds_shift_idx ON ore_feeds (shift_date, shift_no);
 CREATE INDEX IF NOT EXISTS ore_receipts_stockpile_time_idx ON ore_receipts (stockpile_id, occurred_at);
 
+-- Участок Киранкан: собственные штабели, поступление, отгрузка на Перевальное, корректировки остатка
+CREATE TABLE IF NOT EXISTS kirankan_stockpiles (
+  id serial PRIMARY KEY,
+  name text NOT NULL UNIQUE,
+  au_grade numeric(10,3) NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS kirankan_receipts (
+  id serial PRIMARY KEY,
+  stockpile_id integer NOT NULL REFERENCES kirankan_stockpiles(id) ON DELETE CASCADE,
+  occurred_at timestamptz NOT NULL DEFAULT now(),
+  truck_number text,
+  ticket_number text,
+  net_weight_t numeric(12,3) NOT NULL,
+  note text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS kirankan_shipments (
+  id serial PRIMARY KEY,
+  stockpile_id integer NOT NULL REFERENCES kirankan_stockpiles(id) ON DELETE CASCADE,
+  occurred_at timestamptz NOT NULL DEFAULT now(),
+  truck_number text,
+  ticket_number text,
+  net_weight_t numeric(12,3) NOT NULL,
+  au_grade numeric(10,3) NOT NULL DEFAULT 0,
+  note text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS kirankan_adjustments (
+  id serial PRIMARY KEY,
+  stockpile_id integer NOT NULL REFERENCES kirankan_stockpiles(id) ON DELETE CASCADE,
+  occurred_at timestamptz NOT NULL DEFAULT now(),
+  delta_t numeric(14,3) NOT NULL,
+  note text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS kirankan_receipts_pile_time_idx ON kirankan_receipts (stockpile_id, occurred_at);
+CREATE INDEX IF NOT EXISTS kirankan_shipments_pile_time_idx ON kirankan_shipments (stockpile_id, occurred_at);
+CREATE INDEX IF NOT EXISTS kirankan_adjustments_pile_time_idx ON kirankan_adjustments (stockpile_id, occurred_at);
+
 INSERT INTO loaders (name, bucket_weight_t)
 SELECT 'Погрузчик №1', 5 WHERE NOT EXISTS (SELECT 1 FROM loaders);

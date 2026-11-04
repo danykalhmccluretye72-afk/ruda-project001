@@ -52,8 +52,8 @@ export function BalanceTable({ balances, canEdit }: { balances: StockpileBalance
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Остатки по штабелям</CardTitle>
-        <CardDescription>Текущий остаток и накопленное движение, тонны</CardDescription>
+        <CardTitle>Остатки по штабелям Перевальное</CardTitle>
+        <CardDescription>Текущий остаток и движение за текущую смену, тонны</CardDescription>
       </CardHeader>
       <CardContent>
         {balances.length === 0 ? (

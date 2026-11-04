@@ -1,7 +1,19 @@
 import 'server-only'
-import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, lt, sql } from 'drizzle-orm'
 import { db } from './db'
-import { crushingLines, crushingOps, loaders, oreFeeds, oreReceipts, shiftPlans, stockpiles } from './db/schema'
+import {
+  crushingLines,
+  crushingOps,
+  kirankanAdjustments,
+  kirankanReceipts,
+  kirankanShipments,
+  kirankanStockpiles,
+  loaders,
+  oreFeeds,
+  oreReceipts,
+  shiftPlans,
+  stockpiles,
+} from './db/schema'
 import { shiftBounds, type ShiftKey, type ShiftNo } from './shift'
 
 export type Stockpile = {
@@ -371,4 +383,139 @@ export async function getRecentFeeds(limit = 100) {
       tonnage: r.bucketCount * bucketWeightT,
     }
   })
+}
+
+/** Current balances with movement columns limited to the given (current) shift. */
+export async function getCurrentShiftBalances(key: ShiftKey): Promise<StockpileBalance[]> {
+  const { start } = shiftBounds(key)
+  const [now, opening] = await Promise.all([getBalances(), getBalances(start)])
+  const openingById = new Map(opening.map((b) => [b.id, b]))
+  return now.map((b) => {
+    const o = openingById.get(b.id)
+    return {
+      ...b,
+      received: b.received - (o?.received ?? 0),
+      fed: b.fed - (o?.fed ?? 0),
+      crushedIn: b.crushedIn - (o?.crushedIn ?? 0),
+      crushedOut: b.crushedOut - (o?.crushedOut ?? 0),
+    }
+  })
+}
+
+export type KirankanStockpile = { id: number; name: string; auGrade: number }
+
+export type KirankanBalance = KirankanStockpile & {
+  received: number
+  shipped: number
+  adjusted: number
+  balance: number
+}
+
+export async function getKirankanStockpiles(): Promise<KirankanStockpile[]> {
+  const rows = await db.select().from(kirankanStockpiles).orderBy(asc(kirankanStockpiles.name))
+  return rows.map((r) => ({ id: r.id, name: r.name, auGrade: Number(r.auGrade) }))
+}
+
+async function kirankanTotals(from?: Date) {
+  const [receipts, shipments, adjustments] = await Promise.all([
+    db
+      .select({ stockpileId: kirankanReceipts.stockpileId, total: sql<string>`coalesce(sum(${kirankanReceipts.netWeightT}), 0)` })
+      .from(kirankanReceipts)
+      .where(from ? gte(kirankanReceipts.occurredAt, from) : undefined)
+      .groupBy(kirankanReceipts.stockpileId),
+    db
+      .select({ stockpileId: kirankanShipments.stockpileId, total: sql<string>`coalesce(sum(${kirankanShipments.netWeightT}), 0)` })
+      .from(kirankanShipments)
+      .where(from ? gte(kirankanShipments.occurredAt, from) : undefined)
+      .groupBy(kirankanShipments.stockpileId),
+    db
+      .select({ stockpileId: kirankanAdjustments.stockpileId, total: sql<string>`coalesce(sum(${kirankanAdjustments.deltaT}), 0)` })
+      .from(kirankanAdjustments)
+      .where(from ? gte(kirankanAdjustments.occurredAt, from) : undefined)
+      .groupBy(kirankanAdjustments.stockpileId),
+  ])
+  const toMap = (rows: { stockpileId: number; total: string }[]) =>
+    new Map(rows.map((r) => [r.stockpileId, Number(r.total)]))
+  return { received: toMap(receipts), shipped: toMap(shipments), adjusted: toMap(adjustments) }
+}
+
+/** Kirankan balances: balance is current; received/shipped/adjusted are the current shift's movement. */
+export async function getKirankanBalances(key: ShiftKey): Promise<KirankanBalance[]> {
+  const { start } = shiftBounds(key)
+  const [piles, all, shift] = await Promise.all([getKirankanStockpiles(), kirankanTotals(), kirankanTotals(start)])
+  return piles.map((p) => ({
+    ...p,
+    received: shift.received.get(p.id) ?? 0,
+    shipped: shift.shipped.get(p.id) ?? 0,
+    adjusted: shift.adjusted.get(p.id) ?? 0,
+    balance: (all.received.get(p.id) ?? 0) - (all.shipped.get(p.id) ?? 0) + (all.adjusted.get(p.id) ?? 0),
+  }))
+}
+
+export type KirankanJournalEntry = {
+  kind: 'receipt' | 'shipment' | 'adjustment'
+  id: number
+  occurredAt: Date
+  stockpileName: string | null
+  truckNumber: string | null
+  ticketNumber: string | null
+  tonnage: number
+  note: string | null
+}
+
+export async function getKirankanJournal(limit = 100): Promise<KirankanJournalEntry[]> {
+  const [receipts, shipments, adjustments] = await Promise.all([
+    db
+      .select({
+        id: kirankanReceipts.id,
+        occurredAt: kirankanReceipts.occurredAt,
+        stockpileName: kirankanStockpiles.name,
+        truckNumber: kirankanReceipts.truckNumber,
+        ticketNumber: kirankanReceipts.ticketNumber,
+        tonnage: kirankanReceipts.netWeightT,
+        note: kirankanReceipts.note,
+      })
+      .from(kirankanReceipts)
+      .leftJoin(kirankanStockpiles, eq(kirankanStockpiles.id, kirankanReceipts.stockpileId))
+      .orderBy(desc(kirankanReceipts.occurredAt))
+      .limit(limit),
+    db
+      .select({
+        id: kirankanShipments.id,
+        occurredAt: kirankanShipments.occurredAt,
+        stockpileName: kirankanStockpiles.name,
+        truckNumber: kirankanShipments.truckNumber,
+        ticketNumber: kirankanShipments.ticketNumber,
+        tonnage: kirankanShipments.netWeightT,
+        note: kirankanShipments.note,
+      })
+      .from(kirankanShipments)
+      .leftJoin(kirankanStockpiles, eq(kirankanStockpiles.id, kirankanShipments.stockpileId))
+      .orderBy(desc(kirankanShipments.occurredAt))
+      .limit(limit),
+    db
+      .select({
+        id: kirankanAdjustments.id,
+        occurredAt: kirankanAdjustments.occurredAt,
+        stockpileName: kirankanStockpiles.name,
+        tonnage: kirankanAdjustments.deltaT,
+        note: kirankanAdjustments.note,
+      })
+      .from(kirankanAdjustments)
+      .leftJoin(kirankanStockpiles, eq(kirankanStockpiles.id, kirankanAdjustments.stockpileId))
+      .orderBy(desc(kirankanAdjustments.occurredAt))
+      .limit(limit),
+  ])
+  const entries: KirankanJournalEntry[] = [
+    ...receipts.map((r) => ({ ...r, kind: 'receipt' as const, tonnage: Number(r.tonnage) })),
+    ...shipments.map((r) => ({ ...r, kind: 'shipment' as const, tonnage: Number(r.tonnage) })),
+    ...adjustments.map((r) => ({
+      ...r,
+      kind: 'adjustment' as const,
+      truckNumber: null,
+      ticketNumber: null,
+      tonnage: Number(r.tonnage),
+    })),
+  ]
+  return entries.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime()).slice(0, limit)
 }

@@ -70,6 +70,45 @@ export const crushingLines = pgTable('crushing_lines', {
   auGrade: numeric('au_grade', { precision: 10, scale: 3 }).notNull().default('0'),
 })
 
+export const kirankanStockpiles = pgTable('kirankan_stockpiles', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  auGrade: numeric('au_grade', { precision: 10, scale: 3 }).notNull().default('0'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const kirankanReceipts = pgTable('kirankan_receipts', {
+  id: serial('id').primaryKey(),
+  stockpileId: integer('stockpile_id').notNull(),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+  truckNumber: text('truck_number'),
+  ticketNumber: text('ticket_number'),
+  netWeightT: numeric('net_weight_t', { precision: 12, scale: 3 }).notNull(),
+  note: text('note'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const kirankanShipments = pgTable('kirankan_shipments', {
+  id: serial('id').primaryKey(),
+  stockpileId: integer('stockpile_id').notNull(),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+  truckNumber: text('truck_number'),
+  ticketNumber: text('ticket_number'),
+  netWeightT: numeric('net_weight_t', { precision: 12, scale: 3 }).notNull(),
+  auGrade: numeric('au_grade', { precision: 10, scale: 3 }).notNull().default('0'),
+  note: text('note'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const kirankanAdjustments = pgTable('kirankan_adjustments', {
+  id: serial('id').primaryKey(),
+  stockpileId: integer('stockpile_id').notNull(),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+  deltaT: numeric('delta_t', { precision: 14, scale: 3 }).notNull(),
+  note: text('note'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export const shiftPlans = pgTable(
   'shift_plans',
   {
