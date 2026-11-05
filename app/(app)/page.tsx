@@ -1,4 +1,7 @@
+import { CalendarDays } from 'lucide-react'
+import Link from 'next/link'
 import { BalanceSummary } from '@/components/balance-summary'
+import { Button } from '@/components/ui/button'
 import { BalanceTable } from '@/components/balance-table'
 import { KirankanBalanceTable } from '@/components/kirankan-balance-table'
 import { PageHeader } from '@/components/page-header'
@@ -40,8 +43,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
         title="Остатки руды по штабелям"
         description="Остаток = поступление (автовесовая) ± дробление − подача в переработку (ковши погрузчика)."
       />
-      <div className="mb-6">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <ShiftPicker path="/" value={current} current={now} />
+        <Button asChild variant="outline">
+          <Link href={`/daily?date=${current.date}`}>
+            <CalendarDays className="size-4" aria-hidden="true" />
+            Суточный отчёт
+          </Link>
+        </Button>
       </div>
       <BalanceSummary balances={balances} shift={current} report={report} plan={plan} />
       <ShiftTrio

@@ -157,6 +157,17 @@ export type ShiftBalanceRow = {
 /** Остаток на начало и конец смены и движение за смену. */
 export async function getShiftBalanceReport(key: ShiftKey): Promise<ShiftBalanceRow[]> {
   const { start, end } = shiftBounds(key)
+  return getPeriodBalanceReport(start, end)
+}
+
+/** Остатки на начало смены 1 и конец смены 2 и движение за сутки. */
+export async function getDailyBalanceReport(date: string): Promise<ShiftBalanceRow[]> {
+  const { start } = shiftBounds({ date, shift: 1 })
+  const { end } = shiftBounds({ date, shift: 2 })
+  return getPeriodBalanceReport(start, end)
+}
+
+async function getPeriodBalanceReport(start: Date, end: Date): Promise<ShiftBalanceRow[]> {
   const [opening, closing] = await Promise.all([getBalances(start), getBalances(end)])
   const openMap = new Map(opening.map((b) => [b.id, b]))
   return closing.map((c) => {
