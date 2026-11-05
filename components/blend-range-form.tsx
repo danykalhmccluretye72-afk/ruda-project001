@@ -7,12 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { shiftHours } from '@/lib/shift'
-
-export type RangeShifts = 'all' | '1' | '2'
-
-export function blendRangeHref(from: string, to: string, s: RangeShifts) {
-  return `/shifts?view=sum&from=${from}&to=${to}&s=${s}`
-}
+import { blendRangeHref, type RangeShifts } from '@/lib/blend-range'
 
 export function BlendRangeForm({ from, to, shifts }: { from: string; to: string; shifts: RangeShifts }) {
   const router = useRouter()

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { BlendDetailTable } from '@/components/blend-detail-table'
-import { BlendRangeForm, blendRangeHref, type RangeShifts } from '@/components/blend-range-form'
+import { BlendRangeForm } from '@/components/blend-range-form'
+import { blendRangeHref, type RangeShifts } from '@/lib/blend-range'
 import { PageHeader } from '@/components/page-header'
 import { ShiftPicker } from '@/components/shift-picker'
 import { ShiftReport } from '@/components/shift-report'
