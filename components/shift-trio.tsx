@@ -75,10 +75,16 @@ export function ShiftTrio({ columns, balances }: { columns: ShiftColumn[]; balan
                   </div>
                   <div>
                     <dt className="text-muted-foreground">Факт, т</dt>
-                    <dd className="font-mono text-sm font-semibold tabular-nums">{showFact ? formatTons(factT) : '—'}
-                      {showFact && planT > 0 ? (
-                        <span className="ml-1 text-xs font-normal text-muted-foreground">
-                          {formatPercent((factT / planT) * 100)}
+                    <dd className="flex flex-col font-mono tabular-nums">
+                      <span className="text-sm font-semibold">{showFact ? formatTons(factT) : '—'}</span>
+                      {showFact ? (
+                        <span
+                          className={cn(
+                            'text-xs',
+                            planT > 0 && factT >= planT ? 'text-primary' : 'text-muted-foreground',
+                          )}
+                        >
+                          {planT > 0 ? `${formatPercent((factT / planT) * 100)} плана` : 'без плана'}
                         </span>
                       ) : null}
                     </dd>
@@ -94,29 +100,48 @@ export function ShiftTrio({ columns, balances }: { columns: ShiftColumn[]; balan
                   </p>
                 ) : (
                   <ul className="flex flex-col divide-y divide-border text-sm">
-                    {rows.map((r) => (
-                      <li key={r.id} className="flex items-center justify-between gap-2 py-1.5">
-                        <span className="truncate">{r.name}</span>
-                        <span className="shrink-0 font-mono text-xs tabular-nums">
-                          {showFact ? (
-                            <>
-                              <span className="font-semibold">{formatTons(r.fact)}</span>
-                              <span className="text-muted-foreground"> / {formatTons(r.plan)}</span>
-                              <span
-                                className={cn(
-                                  'ml-2 inline-block min-w-12 text-right',
-                                  r.plan > 0 && r.fact >= r.plan ? 'text-primary' : 'text-muted-foreground',
-                                )}
-                              >
-                                {r.plan > 0 ? formatPercent((r.fact / r.plan) * 100) : '—'}
-                              </span>
-                            </>
-                          ) : (
-                            <span className="font-semibold">{formatTons(r.plan)}</span>
-                          )}
-                        </span>
-                      </li>
-                    ))}
+                    <li className="grid grid-cols-[minmax(0,1fr)_auto_3.5rem] items-center gap-3 pb-1 text-xs text-muted-foreground">
+                      <span>Штабель</span>
+                      <span className="text-right">{showFact ? 'факт / план, т' : 'план, т'}</span>
+                      <span className="text-right">{showFact ? 'вып.' : 'доля'}</span>
+                    </li>
+                    {rows.map((r) => {
+                      const pct = showFact
+                        ? r.plan > 0
+                          ? (r.fact / r.plan) * 100
+                          : null
+                        : planT > 0
+                          ? (r.plan / planT) * 100
+                          : null
+                      return (
+                        <li
+                          key={r.id}
+                          className="grid grid-cols-[minmax(0,1fr)_auto_3.5rem] items-center gap-3 py-1.5"
+                        >
+                          <span className="truncate" title={r.name}>
+                            {r.name}
+                          </span>
+                          <span className="whitespace-nowrap text-right font-mono text-xs tabular-nums">
+                            {showFact ? (
+                              <>
+                                <span className="font-semibold">{formatTons(r.fact)}</span>
+                                <span className="text-muted-foreground"> / {formatTons(r.plan)}</span>
+                              </>
+                            ) : (
+                              <span className="font-semibold">{formatTons(r.plan)}</span>
+                            )}
+                          </span>
+                          <span
+                            className={cn(
+                              'whitespace-nowrap text-right font-mono text-xs tabular-nums',
+                              showFact && r.plan > 0 && r.fact >= r.plan ? 'text-primary' : 'text-muted-foreground',
+                            )}
+                          >
+                            {pct === null ? '—' : formatPercent(pct)}
+                          </span>
+                        </li>
+                      )
+                    })}
                   </ul>
                 )}
               </CardContent>
