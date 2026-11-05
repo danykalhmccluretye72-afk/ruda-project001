@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { ShiftFeedReport, StockpileBalance } from '@/lib/queries'
 import { formatShift, shiftHref, type ShiftKey } from '@/lib/shift'
-import { cn, formatGrade, formatTons } from '@/lib/utils'
+import { cn, formatGrade, formatPercent, formatTons } from '@/lib/utils'
 
 export type ShiftColumn = {
   key: ShiftKey
@@ -75,7 +75,13 @@ export function ShiftTrio({ columns, balances }: { columns: ShiftColumn[]; balan
                   </div>
                   <div>
                     <dt className="text-muted-foreground">Факт, т</dt>
-                    <dd className="font-mono text-sm font-semibold tabular-nums">{showFact ? formatTons(factT) : '—'}</dd>
+                    <dd className="font-mono text-sm font-semibold tabular-nums">{showFact ? formatTons(factT) : '—'}
+                      {showFact && planT > 0 ? (
+                        <span className="ml-1 text-xs font-normal text-muted-foreground">
+                          {formatPercent((factT / planT) * 100)}
+                        </span>
+                      ) : null}
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-muted-foreground">Au, г/т</dt>
@@ -96,6 +102,14 @@ export function ShiftTrio({ columns, balances }: { columns: ShiftColumn[]; balan
                             <>
                               <span className="font-semibold">{formatTons(r.fact)}</span>
                               <span className="text-muted-foreground"> / {formatTons(r.plan)}</span>
+                              <span
+                                className={cn(
+                                  'ml-2 inline-block min-w-12 text-right',
+                                  r.plan > 0 && r.fact >= r.plan ? 'text-primary' : 'text-muted-foreground',
+                                )}
+                              >
+                                {r.plan > 0 ? formatPercent((r.fact / r.plan) * 100) : '—'}
+                              </span>
                             </>
                           ) : (
                             <span className="font-semibold">{formatTons(r.plan)}</span>
