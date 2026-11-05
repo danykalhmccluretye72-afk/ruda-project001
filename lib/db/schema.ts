@@ -70,6 +70,16 @@ export const crushingLines = pgTable('crushing_lines', {
   auGrade: numeric('au_grade', { precision: 10, scale: 3 }).notNull().default('0'),
 })
 
+/** Уточнение остатка по маркшейдерскому замеру: delta_t > 0 — излишек, < 0 — недостача */
+export const stockpileAdjustments = pgTable('stockpile_adjustments', {
+  id: serial('id').primaryKey(),
+  stockpileId: integer('stockpile_id').notNull(),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+  deltaT: numeric('delta_t', { precision: 14, scale: 3 }).notNull(),
+  note: text('note'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export const kirankanStockpiles = pgTable('kirankan_stockpiles', {
   id: serial('id').primaryKey(),
   name: text('name').notNull().unique(),

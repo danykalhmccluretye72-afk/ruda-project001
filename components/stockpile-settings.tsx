@@ -1,10 +1,11 @@
 'use client'
 
-import { Archive, ArchiveRestore, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, Pencil, Plus, Scale, Trash2 } from 'lucide-react'
 import { useActionState, useCallback, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import {
   addStockpile,
+  adjustStockpileBalance,
   deleteStockpile,
   toggleStockpileActive,
   updateStockpile,
@@ -26,8 +27,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useActionToast } from '@/hooks/use-action-toast'
-import type { Stockpile } from '@/lib/queries'
-import { formatGrade, formatTons } from '@/lib/utils'
+import type { Stockpile, StockpileBalance } from '@/lib/queries'
+import { cn, formatGrade, formatTons } from '@/lib/utils'
 
 function StockpileDialog({ stockpile }: { stockpile?: Stockpile }) {
   const [open, setOpen] = useState(false)
@@ -100,6 +101,68 @@ function StockpileDialog({ stockpile }: { stockpile?: Stockpile }) {
           <DialogFooter>
             <Button type="submit" disabled={pending}>
               {pending ? 'Сохранение…' : 'Сохранить'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function SurveyDialog({ stockpile }: { stockpile: StockpileBalance }) {
+  const [open, setOpen] = useState(false)
+  const [state, formAction, pending] = useActionState<ActionState, FormData>(adjustStockpileBalance, null)
+  const close = useCallback(() => setOpen(false), [])
+  useActionToast(state, close)
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={`Уточнить остаток по замеру: ${stockpile.name}`}
+          title="Уточнить остаток по маркшейдерскому замеру"
+        >
+          <Scale className="size-4" aria-hidden="true" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Маркшейдерский замер «{stockpile.name}»</DialogTitle>
+          <DialogDescription>
+            Учётный остаток {formatTons(stockpile.balance)} т. Введите остаток по замеру — разница запишется
+            корректировкой, история движений не меняется.
+          </DialogDescription>
+        </DialogHeader>
+        <form action={formAction} className="flex flex-col gap-4">
+          <input type="hidden" name="stockpileId" value={stockpile.id} />
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`survey-${stockpile.id}-actual`}>Остаток по замеру, т</Label>
+            <Input
+              id={`survey-${stockpile.id}-actual`}
+              name="actualT"
+              type="number"
+              inputMode="decimal"
+              step="0.001"
+              min="0"
+              required
+              defaultValue={Math.max(0, Math.round(stockpile.balance * 1000) / 1000)}
+              className="font-mono"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`survey-${stockpile.id}-note`}>Основание</Label>
+            <Input
+              id={`survey-${stockpile.id}-note`}
+              name="note"
+              maxLength={200}
+              placeholder="Маркшейдерский замер №…"
+            />
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={pending}>
+              {pending ? 'Сохранение…' : 'Записать замер'}
             </Button>
           </DialogFooter>
         </form>
@@ -203,7 +266,7 @@ function DeleteStockpileDialog({ stockpile }: { stockpile: Stockpile }) {
   )
 }
 
-export function StockpileSettings({ stockpiles }: { stockpiles: Stockpile[] }) {
+export function StockpileSettings({ stockpiles }: { stockpiles: StockpileBalance[] }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-4">
@@ -222,8 +285,10 @@ export function StockpileSettings({ stockpiles }: { stockpiles: Stockpile[] }) {
               <TableRow>
                 <TableHead>Штабель</TableHead>
                 <TableHead className="text-right">Исходный остаток, т</TableHead>
+                <TableHead className="text-right">Маркшейд. уточн., т</TableHead>
+                <TableHead className="text-right">Текущий остаток, т</TableHead>
                 <TableHead className="text-right">Au, г/т</TableHead>
-                <TableHead className="w-24">
+                <TableHead className="w-32">
                   <span className="sr-only">Действия</span>
                 </TableHead>
               </TableRow>
@@ -238,9 +303,19 @@ export function StockpileSettings({ stockpiles }: { stockpiles: Stockpile[] }) {
                     </div>
                   </TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{formatTons(s.initialTonnage)}</TableCell>
+                  <TableCell
+                    className={cn(
+                      'text-right font-mono tabular-nums',
+                      s.adjusted > 0 ? 'text-success' : s.adjusted < 0 ? 'text-destructive' : 'text-muted-foreground',
+                    )}
+                  >
+                    {s.adjusted === 0 ? '—' : `${s.adjusted > 0 ? '+' : '−'}${formatTons(Math.abs(s.adjusted))}`}
+                  </TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{formatTons(s.balance)}</TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{formatGrade(s.auGrade)}</TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
+                      <SurveyDialog stockpile={s} />
                       <StockpileDialog stockpile={s} />
                       <ToggleActiveButton stockpile={s} />
                     <DeleteStockpileDialog stockpile={s} />

@@ -4,7 +4,16 @@ import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { db } from '@/lib/db'
-import { crushingLines, crushingOps, loaders, oreFeeds, oreReceipts, shiftPlans, stockpiles } from '@/lib/db/schema'
+import {
+  crushingLines,
+  crushingOps,
+  loaders,
+  oreFeeds,
+  oreReceipts,
+  shiftPlans,
+  stockpileAdjustments,
+  stockpiles,
+} from '@/lib/db/schema'
 import {
   MAX_BATCH_DAYS,
   formatShift,
@@ -17,6 +26,7 @@ import {
   type ShiftNo,
 } from '@/lib/shift'
 import { assertOperator } from '@/lib/session'
+import { getBalances } from '@/lib/queries'
 import { formatTons } from '@/lib/utils'
 
 export type ActionState = { ok: boolean; message: string } | null
@@ -497,5 +507,48 @@ export async function deleteCrushing(formData: FormData) {
   await assertOperator()
   const id = z.coerce.number().int().positive().parse(formData.get('id'))
   await db.delete(crushingOps).where(eq(crushingOps.id, id))
+  revalidateAll()
+}
+
+/* ---------- Уточнение остатка по маркшейдерскому замеру ---------- */
+
+const surveySchema = z.object({
+  stockpileId: z.coerce.number().int().positive('Выберите штабель'),
+  actualT: z.coerce
+    .number({ message: 'Фактический остаток: введите число' })
+    .refine((v) => Number.isFinite(v) && v >= 0, 'Фактический остаток не может быть отрицательным'),
+  note: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .transform((v) => (v ? v : undefined)),
+})
+
+export async function adjustStockpileBalance(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  await assertOperator()
+  const parsed = surveySchema.safeParse(Object.fromEntries(formData))
+  if (!parsed.success) return fail(parsed.error)
+  const data = parsed.data
+  const pile = (await getBalances()).find((b) => b.id === data.stockpileId)
+  if (!pile) return { ok: false, message: 'Штабель не найден' }
+  const delta = Math.round((data.actualT - pile.balance) * 1000) / 1000
+  if (delta === 0) return { ok: true, message: 'Остаток совпадает с замером' }
+  await db.insert(stockpileAdjustments).values({
+    stockpileId: data.stockpileId,
+    deltaT: delta.toFixed(3),
+    note: data.note ?? 'Маркшейдерский замер',
+  })
+  revalidateAll()
+  return {
+    ok: true,
+    message: `«${pile.name}»: остаток ${formatTons(data.actualT)} т (${delta > 0 ? '+' : '−'}${formatTons(Math.abs(delta))} т)`,
+  }
+}
+
+export async function deleteStockpileAdjustment(formData: FormData) {
+  await assertOperator()
+  const id = z.coerce.number().int().positive().parse(formData.get('id'))
+  await db.delete(stockpileAdjustments).where(eq(stockpileAdjustments.id, id))
   revalidateAll()
 }

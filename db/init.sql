@@ -157,5 +157,16 @@ CREATE TABLE IF NOT EXISTS shift_closure_lines (
 
 CREATE INDEX IF NOT EXISTS shift_closure_lines_closure_idx ON shift_closure_lines (closure_id);
 
+CREATE TABLE IF NOT EXISTS stockpile_adjustments (
+  id serial PRIMARY KEY,
+  stockpile_id integer NOT NULL REFERENCES stockpiles(id) ON DELETE CASCADE,
+  occurred_at timestamptz NOT NULL DEFAULT now(),
+  delta_t numeric(14,3) NOT NULL,
+  note text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS stockpile_adjustments_pile_idx ON stockpile_adjustments (stockpile_id, occurred_at);
+
 INSERT INTO loaders (name, bucket_weight_t)
 SELECT 'Погрузчик №1', 5 WHERE NOT EXISTS (SELECT 1 FROM loaders);

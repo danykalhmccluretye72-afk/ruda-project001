@@ -14,6 +14,7 @@ import {
   shiftClosureLines,
   shiftClosures,
   shiftPlans,
+  stockpileAdjustments,
   stockpiles,
 } from './db/schema'
 import { shiftBounds, type ShiftKey, type ShiftNo } from './shift'
@@ -57,6 +58,8 @@ export type StockpileBalance = Stockpile & {
   fed: number
   crushedIn: number
   crushedOut: number
+  /** Маркшейдерские уточнения: + излишек, − недостача */
+  adjusted: number
   balance: number
 }
 
@@ -64,7 +67,7 @@ const crushLineTonnage = sql<string>`coalesce(sum(${crushingLines.bucketCount} *
 
 /** Остатки по штабелям. `until` — учитывать только движения строго раньше этого момента. */
 export async function getBalances(until?: Date): Promise<StockpileBalance[]> {
-  const [piles, receiptTotals, feedTotals, crushInTotals, crushOutTotals, closureTotals] = await Promise.all([
+  const [piles, receiptTotals, feedTotals, crushInTotals, crushOutTotals, closureTotals, adjustTotals] = await Promise.all([
     getStockpiles(),
     db
       .select({ stockpileId: oreReceipts.stockpileId, total: sql<string>`coalesce(sum(${oreReceipts.netWeightT}), 0)` })
@@ -100,6 +103,14 @@ export async function getBalances(until?: Date): Promise<StockpileBalance[]> {
       .innerJoin(shiftClosures, eq(shiftClosures.id, shiftClosureLines.closureId))
       .where(until ? lt(shiftClosures.occurredAt, until) : undefined)
       .groupBy(shiftClosureLines.stockpileId),
+    db
+      .select({
+        stockpileId: stockpileAdjustments.stockpileId,
+        total: sql<string>`coalesce(sum(${stockpileAdjustments.deltaT}), 0)`,
+      })
+      .from(stockpileAdjustments)
+      .where(until ? lt(stockpileAdjustments.occurredAt, until) : undefined)
+      .groupBy(stockpileAdjustments.stockpileId),
   ])
 
   const toMap = (rows: { stockpileId: number; total: string }[]) =>
@@ -110,19 +121,22 @@ export async function getBalances(until?: Date): Promise<StockpileBalance[]> {
   for (const [id, delta] of toMap(closureTotals)) fedMap.set(id, (fedMap.get(id) ?? 0) + delta)
   const inMap = toMap(crushInTotals)
   const outMap = toMap(crushOutTotals)
+  const adjMap = toMap(adjustTotals)
 
   return piles.map((p) => {
     const received = receivedMap.get(p.id) ?? 0
     const fed = fedMap.get(p.id) ?? 0
     const crushedIn = inMap.get(p.id) ?? 0
     const crushedOut = outMap.get(p.id) ?? 0
+    const adjusted = adjMap.get(p.id) ?? 0
     return {
       ...p,
       received,
       fed,
       crushedIn,
       crushedOut,
-      balance: p.initialTonnage + received + crushedIn - fed - crushedOut,
+      adjusted,
+      balance: p.initialTonnage + received + crushedIn - fed - crushedOut + adjusted,
     }
   })
 }
@@ -412,6 +426,7 @@ export async function getCurrentShiftBalances(key: ShiftKey): Promise<StockpileB
       fed: b.fed - (o?.fed ?? 0),
       crushedIn: b.crushedIn - (o?.crushedIn ?? 0),
       crushedOut: b.crushedOut - (o?.crushedOut ?? 0),
+      adjusted: b.adjusted - (o?.adjusted ?? 0),
     }
   })
 }
@@ -693,4 +708,28 @@ export async function getBlendRange(from: string, to: string, shifts: ShiftNo[])
       metalG: Number(r.metal),
     })),
   }
+}
+
+export type StockpileAdjustmentEntry = {
+  id: number
+  occurredAt: Date
+  stockpileName: string
+  deltaT: number
+  note: string | null
+}
+
+export async function getStockpileAdjustments(limit = 50): Promise<StockpileAdjustmentEntry[]> {
+  const rows = await db
+    .select({
+      id: stockpileAdjustments.id,
+      occurredAt: stockpileAdjustments.occurredAt,
+      stockpileName: stockpiles.name,
+      deltaT: stockpileAdjustments.deltaT,
+      note: stockpileAdjustments.note,
+    })
+    .from(stockpileAdjustments)
+    .leftJoin(stockpiles, eq(stockpiles.id, stockpileAdjustments.stockpileId))
+    .orderBy(desc(stockpileAdjustments.occurredAt))
+    .limit(limit)
+  return rows.map((r) => ({ ...r, stockpileName: r.stockpileName ?? '—', deltaT: Number(r.deltaT) }))
 }
