@@ -109,6 +109,32 @@ export const kirankanAdjustments = pgTable('kirankan_adjustments', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+export const shiftClosures = pgTable(
+  'shift_closures',
+  {
+    id: serial('id').primaryKey(),
+    shiftDate: date('shift_date').notNull(),
+    shiftNo: smallint('shift_no').notNull(),
+    scaleT: numeric('scale_t', { precision: 12, scale: 3 }).notNull(),
+    fedT: numeric('fed_t', { precision: 12, scale: 3 }).notNull(),
+    blendGrade: numeric('blend_grade', { precision: 10, scale: 3 }).notNull().default('0'),
+    targetStockpileId: integer('target_stockpile_id'),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    note: text('note'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.shiftDate, t.shiftNo)],
+)
+
+/** delta_t > 0 — досписание со штабеля, delta_t < 0 — возврат излишка в штабель */
+export const shiftClosureLines = pgTable('shift_closure_lines', {
+  id: serial('id').primaryKey(),
+  closureId: integer('closure_id').notNull(),
+  stockpileId: integer('stockpile_id').notNull(),
+  deltaT: numeric('delta_t', { precision: 14, scale: 3 }).notNull(),
+  auGrade: numeric('au_grade', { precision: 10, scale: 3 }).notNull().default('0'),
+})
+
 export const shiftPlans = pgTable(
   'shift_plans',
   {

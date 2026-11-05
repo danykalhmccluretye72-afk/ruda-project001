@@ -133,5 +133,29 @@ CREATE INDEX IF NOT EXISTS kirankan_receipts_pile_time_idx ON kirankan_receipts 
 CREATE INDEX IF NOT EXISTS kirankan_shipments_pile_time_idx ON kirankan_shipments (stockpile_id, occurred_at);
 CREATE INDEX IF NOT EXISTS kirankan_adjustments_pile_time_idx ON kirankan_adjustments (stockpile_id, occurred_at);
 
+CREATE TABLE IF NOT EXISTS shift_closures (
+  id serial PRIMARY KEY,
+  shift_date date NOT NULL,
+  shift_no smallint NOT NULL,
+  scale_t numeric(12,3) NOT NULL,
+  fed_t numeric(12,3) NOT NULL,
+  blend_grade numeric(10,3) NOT NULL DEFAULT 0,
+  target_stockpile_id integer REFERENCES stockpiles(id) ON DELETE SET NULL,
+  occurred_at timestamptz NOT NULL,
+  note text,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (shift_date, shift_no)
+);
+
+CREATE TABLE IF NOT EXISTS shift_closure_lines (
+  id serial PRIMARY KEY,
+  closure_id integer NOT NULL REFERENCES shift_closures(id) ON DELETE CASCADE,
+  stockpile_id integer NOT NULL REFERENCES stockpiles(id) ON DELETE CASCADE,
+  delta_t numeric(14,3) NOT NULL,
+  au_grade numeric(10,3) NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS shift_closure_lines_closure_idx ON shift_closure_lines (closure_id);
+
 INSERT INTO loaders (name, bucket_weight_t)
 SELECT 'Погрузчик №1', 5 WHERE NOT EXISTS (SELECT 1 FROM loaders);

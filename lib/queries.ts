@@ -11,6 +11,8 @@ import {
   loaders,
   oreFeeds,
   oreReceipts,
+  shiftClosureLines,
+  shiftClosures,
   shiftPlans,
   stockpiles,
 } from './db/schema'
@@ -62,7 +64,7 @@ const crushLineTonnage = sql<string>`coalesce(sum(${crushingLines.bucketCount} *
 
 /** Остатки по штабелям. `until` — учитывать только движения строго раньше этого момента. */
 export async function getBalances(until?: Date): Promise<StockpileBalance[]> {
-  const [piles, receiptTotals, feedTotals, crushInTotals, crushOutTotals] = await Promise.all([
+  const [piles, receiptTotals, feedTotals, crushInTotals, crushOutTotals, closureTotals] = await Promise.all([
     getStockpiles(),
     db
       .select({ stockpileId: oreReceipts.stockpileId, total: sql<string>`coalesce(sum(${oreReceipts.netWeightT}), 0)` })
@@ -89,12 +91,23 @@ export async function getBalances(until?: Date): Promise<StockpileBalance[]> {
       .innerJoin(crushingOps, eq(crushingOps.id, crushingLines.opId))
       .where(until ? lt(crushingOps.occurredAt, until) : undefined)
       .groupBy(crushingLines.sourceStockpileId),
+    db
+      .select({
+        stockpileId: shiftClosureLines.stockpileId,
+        total: sql<string>`coalesce(sum(${shiftClosureLines.deltaT}), 0)`,
+      })
+      .from(shiftClosureLines)
+      .innerJoin(shiftClosures, eq(shiftClosures.id, shiftClosureLines.closureId))
+      .where(until ? lt(shiftClosures.occurredAt, until) : undefined)
+      .groupBy(shiftClosureLines.stockpileId),
   ])
 
   const toMap = (rows: { stockpileId: number; total: string }[]) =>
     new Map(rows.map((r) => [r.stockpileId, Number(r.total)]))
   const receivedMap = toMap(receiptTotals)
   const fedMap = toMap(feedTotals)
+  // Корректировки закрытия смены входят в «подано»: досписание увеличивает, возврат излишка уменьшает.
+  for (const [id, delta] of toMap(closureTotals)) fedMap.set(id, (fedMap.get(id) ?? 0) + delta)
   const inMap = toMap(crushInTotals)
   const outMap = toMap(crushOutTotals)
 
@@ -531,4 +544,102 @@ export async function getKirankanJournal(limit = 100): Promise<KirankanJournalEn
     })),
   ]
   return entries.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime()).slice(0, limit)
+}
+
+/* ---------- Закрытие смены ---------- */
+
+export type ShiftClosureLine = { stockpileId: number; stockpileName: string; deltaT: number; auGrade: number }
+
+export type ShiftClosure = {
+  id: number
+  date: string
+  shift: ShiftNo
+  scaleT: number
+  fedT: number
+  blendGrade: number
+  targetStockpileId: number | null
+  targetStockpileName: string | null
+  note: string | null
+  updatedAt: Date
+  lines: ShiftClosureLine[]
+}
+
+export async function getShiftClosure(key: ShiftKey): Promise<ShiftClosure | null> {
+  const [row] = await db
+    .select({
+      id: shiftClosures.id,
+      scaleT: shiftClosures.scaleT,
+      fedT: shiftClosures.fedT,
+      blendGrade: shiftClosures.blendGrade,
+      targetStockpileId: shiftClosures.targetStockpileId,
+      targetStockpileName: stockpiles.name,
+      note: shiftClosures.note,
+      updatedAt: shiftClosures.updatedAt,
+    })
+    .from(shiftClosures)
+    .leftJoin(stockpiles, eq(stockpiles.id, shiftClosures.targetStockpileId))
+    .where(and(eq(shiftClosures.shiftDate, key.date), eq(shiftClosures.shiftNo, key.shift)))
+  if (!row) return null
+  const lines = await db
+    .select({
+      stockpileId: shiftClosureLines.stockpileId,
+      stockpileName: stockpiles.name,
+      deltaT: shiftClosureLines.deltaT,
+      auGrade: shiftClosureLines.auGrade,
+    })
+    .from(shiftClosureLines)
+    .leftJoin(stockpiles, eq(stockpiles.id, shiftClosureLines.stockpileId))
+    .where(eq(shiftClosureLines.closureId, row.id))
+    .orderBy(asc(stockpiles.name))
+  return {
+    id: row.id,
+    date: key.date,
+    shift: key.shift,
+    scaleT: Number(row.scaleT),
+    fedT: Number(row.fedT),
+    blendGrade: Number(row.blendGrade),
+    targetStockpileId: row.targetStockpileId,
+    targetStockpileName: row.targetStockpileName,
+    note: row.note,
+    updatedAt: row.updatedAt,
+    lines: lines.map((l) => ({
+      stockpileId: l.stockpileId,
+      stockpileName: l.stockpileName ?? '—',
+      deltaT: Number(l.deltaT),
+      auGrade: Number(l.auGrade),
+    })),
+  }
+}
+
+export type ShiftClosureSummary = {
+  date: string
+  shift: ShiftNo
+  scaleT: number
+  fedT: number
+  blendGrade: number
+  targetStockpileName: string | null
+}
+
+export async function getRecentClosures(limit = 20): Promise<ShiftClosureSummary[]> {
+  const rows = await db
+    .select({
+      date: shiftClosures.shiftDate,
+      shift: shiftClosures.shiftNo,
+      scaleT: shiftClosures.scaleT,
+      fedT: shiftClosures.fedT,
+      blendGrade: shiftClosures.blendGrade,
+      targetStockpileName: stockpiles.name,
+    })
+    .from(shiftClosures)
+    .leftJoin(stockpiles, eq(stockpiles.id, shiftClosures.targetStockpileId))
+    .orderBy(desc(shiftClosures.shiftDate), desc(shiftClosures.shiftNo))
+    .limit(limit)
+  return rows.map((r) => ({
+    date: r.date,
+    shift: (r.shift === 1 ? 1 : 2) as ShiftNo,
+    scaleT: Number(r.scaleT),
+    fedT: Number(r.fedT),
+    blendGrade: Number(r.blendGrade),
+    targetStockpileName: r.targetStockpileName,
+  }))
 }
