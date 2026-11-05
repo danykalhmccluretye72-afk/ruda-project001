@@ -145,11 +145,11 @@ export function ClosureForm({
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <span className="text-sm font-medium">Подано по ковшам, т</span>
+                <span className="text-sm font-medium leading-none">Подано по ковшам, т</span>
                 <p className="flex h-9 items-center tabular-nums">{formatTons(fed)}</p>
               </div>
               <div className="flex flex-col gap-2">
-                <span className="text-sm font-medium">Разница (весы − подача), т</span>
+                <span className="text-sm font-medium leading-none">Разница (весы − ��одача), т</span>
                 <p
                   className={
                     shortage
