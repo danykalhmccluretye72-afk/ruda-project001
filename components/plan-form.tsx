@@ -27,6 +27,25 @@ function round1(n: number) {
   return Math.round(n * 10) / 10
 }
 
+function ShortageWarning({ title, items }: { title: string; items: { name: string; deficit: number }[] }) {
+  return (
+    <div role="status" className="flex flex-col gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm">
+      <p className="font-medium text-destructive">{title}</p>
+      <ul className="flex flex-col gap-1">
+        {items.map((i) => (
+          <li key={i.name} className="flex items-baseline justify-between gap-2">
+            <span>{i.name}</span>
+            <span className="font-mono tabular-nums text-destructive">−{formatTons(i.deficit)} т</span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Планирование не блокируется — руда может поступить до начала смены.
+      </p>
+    </div>
+  )
+}
+
 export function PlanForm({ shift, rows, loaders }: { shift: ShiftKey; rows: Row[]; loaders: LoaderOption[] }) {
   const initialTotal = rows.reduce((s, r) => s + r.planned, 0)
   const [mode, setMode] = useState<Mode>('tons')
@@ -254,9 +273,12 @@ export function PlanForm({ shift, rows, loaders }: { shift: ShiftKey; rows: Row[
             </TableFooter>
           </Table>
           {hasOver ? (
-            <p className="text-sm text-destructive" role="alert">
-              План по некоторым штабелям превышает текущий остаток.
-            </p>
+            <ShortageWarning
+              title="Недостаточно руды на складе для плана смены"
+              items={computed
+                .filter((r) => r.over)
+                .map((r) => ({ name: r.name, deficit: r.plannedNum - Math.max(0, r.balance) }))}
+            />
           ) : null}
         </CardContent>
       </Card>
@@ -385,9 +407,13 @@ export function PlanForm({ shift, rows, loaders }: { shift: ShiftKey; rows: Row[
               </div>
             </dl>
             {batchOver.length > 0 ? (
-              <p className="text-sm text-destructive" role="alert">
-                Суммарный план за период превышает остаток: {batchOver.map((r) => r.name).join(', ')}.
-              </p>
+              <ShortageWarning
+                title="Суммарный план за период превышает остаток"
+                items={batchOver.map((r) => ({
+                  name: r.name,
+                  deficit: r.plannedNum * batchCount - Math.max(0, r.balance),
+                }))}
+              />
             ) : null}
             <Button
               type="submit"
