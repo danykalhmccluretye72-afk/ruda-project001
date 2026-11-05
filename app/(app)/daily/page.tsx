@@ -14,6 +14,15 @@ export const dynamic = 'force-dynamic'
 const num = 'text-right font-mono tabular-nums'
 const dash = (v: number) => (Math.abs(v) < 0.005 ? '—' : formatTons(v))
 
+function Flow({ value }: { value: number }) {
+  if (Math.abs(value) < 0.005) return <span className="text-muted-foreground">—</span>
+  return value > 0 ? (
+    <span className="text-success">+{formatTons(value)}</span>
+  ) : (
+    <span className="text-destructive">−{formatTons(-value)}</span>
+  )
+}
+
 function Pct({ fact, plan }: { fact: number; plan: number }) {
   const p = percent(fact, plan)
   if (p === null) return <span className="text-muted-foreground">—</span>
@@ -196,10 +205,18 @@ export default async function DailyReportPage({ searchParams }: { searchParams: 
                       {!r.isActive ? <span className="ml-2 text-xs text-muted-foreground">архив</span> : null}
                     </TableCell>
                     <TableCell className={cn(num, 'text-muted-foreground')}>{formatTons(r.opening)}</TableCell>
-                    <TableCell className={num}>{dash(r.received)}</TableCell>
-                    <TableCell className={num}>{dash(r.crushedIn)}</TableCell>
-                    <TableCell className={num}>{dash(r.crushedOut)}</TableCell>
-                    <TableCell className={num}>{dash(r.fed)}</TableCell>
+                    <TableCell className={num}>
+                      <Flow value={r.received} />
+                    </TableCell>
+                    <TableCell className={num}>
+                      <Flow value={r.crushedIn} />
+                    </TableCell>
+                    <TableCell className={num}>
+                      <Flow value={-r.crushedOut} />
+                    </TableCell>
+                    <TableCell className={num}>
+                      <Flow value={-r.fed} />
+                    </TableCell>
                     <TableCell className={cn(num, 'font-semibold')}>{formatTons(r.closing)}</TableCell>
                     <TableCell className={num}>{formatGrade(r.auGrade)}</TableCell>
                     <TableCell className={num}>{formatMetal(r.closing * r.auGrade)}</TableCell>
@@ -210,10 +227,18 @@ export default async function DailyReportPage({ searchParams }: { searchParams: 
                 <TableRow>
                   <TableCell className="font-semibold">Итого</TableCell>
                   <TableCell className={num}>{formatTons(bal.opening)}</TableCell>
-                  <TableCell className={num}>{dash(bal.received)}</TableCell>
-                  <TableCell className={num}>{dash(bal.crushedIn)}</TableCell>
-                  <TableCell className={num}>{dash(bal.crushedOut)}</TableCell>
-                  <TableCell className={num}>{dash(bal.fed)}</TableCell>
+                  <TableCell className={num}>
+                    <Flow value={bal.received} />
+                  </TableCell>
+                  <TableCell className={num}>
+                    <Flow value={bal.crushedIn} />
+                  </TableCell>
+                  <TableCell className={num}>
+                    <Flow value={-bal.crushedOut} />
+                  </TableCell>
+                  <TableCell className={num}>
+                    <Flow value={-bal.fed} />
+                  </TableCell>
                   <TableCell className={cn(num, 'font-semibold')}>{formatTons(bal.closing)}</TableCell>
                   <TableCell className={num}>{formatGrade(bal.closing > 0 ? bal.metal / bal.closing : 0)}</TableCell>
                   <TableCell className={num}>{formatMetal(bal.metal)}</TableCell>
