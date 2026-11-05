@@ -29,7 +29,10 @@ function sum(a: FeedTotals, b: FeedTotals): FeedTotals {
   return withGrade({ planT: a.planT + b.planT, factT: a.factT + b.factT, metalG: a.metalG + b.metalG, grade: 0 })
 }
 
-export async function buildDailyReport(date: string): Promise<DailyReport> {
+export async function buildDailyReport(
+  date: string,
+  { hideArchive = false }: { hideArchive?: boolean } = {},
+): Promise<DailyReport> {
   const k1: ShiftKey = { date, shift: 1 }
   const k2: ShiftKey = { date, shift: 2 }
   const [balances, feed1, feed2, plan1, plan2] = await Promise.all([
@@ -41,6 +44,8 @@ export async function buildDailyReport(date: string): Promise<DailyReport> {
   ])
 
   const names = new Map(balances.map((b) => [b.id, b.name]))
+  const archived = new Set(balances.filter((b) => !b.isActive).map((b) => b.id))
+  const visible = (id: number) => !hideArchive || !archived.has(id)
   const rows = new Map<number, { s1: FeedTotals; s2: FeedTotals }>()
   const row = (id: number) => {
     let r = rows.get(id)
@@ -68,7 +73,7 @@ export async function buildDailyReport(date: string): Promise<DailyReport> {
       const s2 = withGrade(r.s2)
       return { stockpileId: id, name: names.get(id) ?? '—', s1, s2, day: sum(s1, s2) }
     })
-    .filter((r) => r.day.planT > 0 || r.day.factT > 0)
+    .filter((r) => visible(r.stockpileId) && (r.day.planT > 0 || r.day.factT > 0))
     .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
 
   const s1 = feedRows.reduce((acc, r) => sum(acc, r.s1), empty())
@@ -78,7 +83,9 @@ export async function buildDailyReport(date: string): Promise<DailyReport> {
     date,
     shifts: { s1, s2, day: sum(s1, s2) },
     feedRows,
-    balanceRows: balances.filter((r) => r.isActive || r.opening !== 0 || r.closing !== 0),
+    balanceRows: balances.filter(
+      (r) => r.isActive || (!hideArchive && (r.opening !== 0 || r.closing !== 0)),
+    ),
   }
 }
 

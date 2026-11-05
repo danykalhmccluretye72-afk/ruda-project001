@@ -8,9 +8,19 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { shiftDateOffset } from '@/lib/shift'
 
-export function DayPicker({ path, value, today }: { path: string; value: string; today: string }) {
+export function DayPicker({
+  path,
+  value,
+  today,
+  query = '',
+}: {
+  path: string
+  value: string
+  today: string
+  query?: string
+}) {
   const router = useRouter()
-  const href = (date: string) => `${path}?date=${date}`
+  const href = (date: string) => `${path}?date=${date}${query}`
 
   return (
     <div className="flex flex-wrap items-end gap-3">
@@ -42,6 +52,21 @@ export function DayPicker({ path, value, today }: { path: string; value: string;
         </Button>
       ) : null}
     </div>
+  )
+}
+
+export function ArchiveToggle({ path, date, hideArchive }: { path: string; date: string; hideArchive: boolean }) {
+  const router = useRouter()
+  return (
+    <label className="flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input px-3 text-sm">
+      <input
+        type="checkbox"
+        className="size-4 accent-primary"
+        checked={hideArchive}
+        onChange={(e) => router.push(`${path}?date=${date}${e.target.checked ? '&archive=0' : ''}`)}
+      />
+      Без архивных штабелей
+    </label>
   )
 }
 

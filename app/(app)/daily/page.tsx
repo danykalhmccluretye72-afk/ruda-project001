@@ -1,5 +1,5 @@
 import { Download } from 'lucide-react'
-import { DayPicker, PrintButton } from '@/components/day-picker'
+import { ArchiveToggle, DayPicker, PrintButton } from '@/components/day-picker'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -41,12 +41,18 @@ function FeedCells({ t, strong }: { t: FeedTotals; strong?: boolean }) {
   )
 }
 
-export default async function DailyReportPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
+export default async function DailyReportPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string; archive?: string }>
+}) {
   await requireUser()
   const params = await searchParams
   const today = getShift(new Date()).date
   const date = parseShiftKey(params.date, '1')?.date ?? today
-  const report = await buildDailyReport(date)
+  const hideArchive = params.archive === '0'
+  const query = hideArchive ? '&archive=0' : ''
+  const report = await buildDailyReport(date, { hideArchive })
   const { s1, s2, day } = report.shifts
 
   const bal = report.balanceRows.reduce(
@@ -75,11 +81,12 @@ export default async function DailyReportPage({ searchParams }: { searchParams: 
         description="Сутки = смена 1 (19:00 предыдущего дня – 07:00) + смена 2 (07:00 – 19:00), время Хабаровска."
       />
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4 print:hidden">
-        <DayPicker path="/daily" value={date} today={today} />
-        <div className="flex flex-wrap gap-2">
+        <DayPicker path="/daily" value={date} today={today} query={query} />
+        <div className="flex flex-wrap items-center gap-2">
+          <ArchiveToggle path="/daily" date={date} hideArchive={hideArchive} />
           <PrintButton />
           <Button asChild>
-            <a href={`/api/reports/daily?date=${date}`} download>
+            <a href={`/api/reports/daily?date=${date}${query}`} download>
               <Download className="size-4" aria-hidden="true" />
               Выгрузить в Excel (CSV)
             </a>

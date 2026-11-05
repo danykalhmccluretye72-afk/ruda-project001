@@ -16,10 +16,11 @@ export async function GET(request: Request) {
   const session = await getSession()
   if (!session?.user) return new Response('Требуется вход', { status: 401 })
 
-  const date = parseShiftKey(new URL(request.url).searchParams.get('date') ?? undefined, '1')?.date
+  const search = new URL(request.url).searchParams
+  const date = parseShiftKey(search.get('date') ?? undefined, '1')?.date
   if (!date) return new Response('Неверная дата', { status: 400 })
 
-  const report = await buildDailyReport(date)
+  const report = await buildDailyReport(date, { hideArchive: search.get('archive') === '0' })
   const { s1, s2, day } = report.shifts
   const lines: string[] = [cell(`Суточный отчёт за ${formatShiftDate(date)}, время Хабаровска`), '']
 
