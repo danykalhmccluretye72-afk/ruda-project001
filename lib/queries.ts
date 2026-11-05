@@ -643,3 +643,54 @@ export async function getRecentClosures(limit = 20): Promise<ShiftClosureSummary
     targetStockpileName: r.targetStockpileName,
   }))
 }
+
+export type BlendRange = {
+  plan: Map<number, number>
+  fact: BlendLine[]
+}
+
+/** Плановая и фактическая шихта по штабелям, отсуммированная за диапазон дат и выбранные смены */
+export async function getBlendRange(from: string, to: string, shifts: ShiftNo[]): Promise<BlendRange> {
+  const feedWhere = and(
+    gte(oreFeeds.shiftDate, from),
+    sql`${oreFeeds.shiftDate} <= ${to}`,
+    inArray(oreFeeds.shiftNo, shifts),
+  )
+  const planWhere = and(
+    gte(shiftPlans.shiftDate, from),
+    sql`${shiftPlans.shiftDate} <= ${to}`,
+    inArray(shiftPlans.shiftNo, shifts),
+  )
+  const [fact, plan] = await Promise.all([
+    db
+      .select({
+        stockpileId: oreFeeds.stockpileId,
+        stockpileName: stockpiles.name,
+        tonnage: tonnageExpr,
+        buckets: bucketsExpr,
+        metal: metalExpr,
+      })
+      .from(oreFeeds)
+      .leftJoin(stockpiles, eq(stockpiles.id, oreFeeds.stockpileId))
+      .where(feedWhere)
+      .groupBy(oreFeeds.stockpileId, stockpiles.name),
+    db
+      .select({
+        stockpileId: shiftPlans.stockpileId,
+        planned: sql<string>`coalesce(sum(${shiftPlans.plannedT}), 0)`,
+      })
+      .from(shiftPlans)
+      .where(planWhere)
+      .groupBy(shiftPlans.stockpileId),
+  ])
+  return {
+    plan: new Map(plan.map((p) => [p.stockpileId, Number(p.planned)])),
+    fact: fact.map((r) => ({
+      stockpileId: r.stockpileId,
+      stockpileName: r.stockpileName ?? '—',
+      tonnage: Number(r.tonnage),
+      buckets: Number(r.buckets),
+      metalG: Number(r.metal),
+    })),
+  }
+}
