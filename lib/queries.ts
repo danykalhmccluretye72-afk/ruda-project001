@@ -25,13 +25,22 @@ export type Stockpile = {
   initialTonnage: number
   auGrade: number
   isActive: boolean
+  isHistorical: boolean
 }
 
-export async function getStockpiles(options: { activeOnly?: boolean } = {}): Promise<Stockpile[]> {
+/** По умолчанию исторические штабели исключены — они видны только во вкладке «Исторические данные». */
+export async function getStockpiles(
+  options: { activeOnly?: boolean; includeHistorical?: boolean; historicalOnly?: boolean } = {},
+): Promise<Stockpile[]> {
+  const historyFilter = options.historicalOnly
+    ? eq(stockpiles.isHistorical, true)
+    : options.includeHistorical
+      ? undefined
+      : eq(stockpiles.isHistorical, false)
   const rows = await db
     .select()
     .from(stockpiles)
-    .where(options.activeOnly ? eq(stockpiles.isActive, true) : undefined)
+    .where(and(options.activeOnly ? eq(stockpiles.isActive, true) : undefined, historyFilter))
     .orderBy(asc(stockpiles.name))
   return rows.map((r) => ({
     id: r.id,
@@ -39,6 +48,7 @@ export async function getStockpiles(options: { activeOnly?: boolean } = {}): Pro
     initialTonnage: Number(r.initialTonnage),
     auGrade: Number(r.auGrade),
     isActive: r.isActive,
+    isHistorical: r.isHistorical,
   }))
 }
 
@@ -66,9 +76,12 @@ export type StockpileBalance = Stockpile & {
 const crushLineTonnage = sql<string>`coalesce(sum(${crushingLines.bucketCount} * ${crushingOps.bucketWeightT}), 0)`
 
 /** Остатки по штабелям. `until` — учитывать только движения строго раньше этого момента. */
-export async function getBalances(until?: Date): Promise<StockpileBalance[]> {
+export async function getBalances(
+  until?: Date,
+  options: { includeHistorical?: boolean; historicalOnly?: boolean } = {},
+): Promise<StockpileBalance[]> {
   const [piles, receiptTotals, feedTotals, crushInTotals, crushOutTotals, closureTotals, adjustTotals] = await Promise.all([
-    getStockpiles(),
+    getStockpiles(options),
     db
       .select({ stockpileId: oreReceipts.stockpileId, total: sql<string>`coalesce(sum(${oreReceipts.netWeightT}), 0)` })
       .from(oreReceipts)
@@ -168,9 +181,10 @@ export async function getDailyBalanceReport(date: string): Promise<ShiftBalanceR
 }
 
 async function getPeriodBalanceReport(start: Date, end: Date): Promise<ShiftBalanceRow[]> {
-  const [opening, closing] = await Promise.all([getBalances(start), getBalances(end)])
+  const all = { includeHistorical: true }
+  const [opening, closing] = await Promise.all([getBalances(start, all), getBalances(end, all)])
   const openMap = new Map(opening.map((b) => [b.id, b]))
-  return closing.map((c) => {
+  const rows = closing.map((c) => {
     const o = openMap.get(c.id)
     const adj = c.adjusted - (o?.adjusted ?? 0)
     return {
@@ -184,8 +198,18 @@ async function getPeriodBalanceReport(start: Date, end: Date): Promise<ShiftBala
       crushedOut: c.crushedOut - (o?.crushedOut ?? 0),
       fed: c.fed - (o?.fed ?? 0) + Math.max(-adj, 0),
       closing: c.balance,
+      isHistorical: c.isHistorical,
     }
   })
+  // Исторические штабели попадают в отчёт за период, только если в этом периоде по ним было движение или остаток.
+  const eps = 0.0005
+  return rows
+    .filter(
+      (r) =>
+        !r.isHistorical ||
+        [r.opening, r.received, r.crushedIn, r.crushedOut, r.fed, r.closing].some((v) => Math.abs(v) > eps),
+    )
+    .map(({ isHistorical: _h, ...r }) => r)
 }
 
 export async function getRecentCrushing(limit = 50) {

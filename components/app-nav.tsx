@@ -11,6 +11,7 @@ import {
   ClipboardList,
   FileSpreadsheet,
   Hammer,
+  History,
   LayoutGrid,
   LogOut,
   Mountain,
@@ -33,6 +34,7 @@ const links: { href: string; label: string; icon: typeof LayoutGrid; roles: Role
   { href: '/closing', label: 'Закрытие смены', icon: ClipboardCheck, roles: ['user', 'admin'] },
   { href: '/planning', label: 'Планирование', icon: CalendarClock, roles: ['user', 'admin'] },
   { href: '/reports', label: 'Отчёты', icon: FileSpreadsheet, roles: ['user', 'admin'] },
+  { href: '/history', label: 'Исторические данные', icon: History, roles: ['info', 'user', 'admin'] },
   { href: '/settings', label: 'Настройки', icon: Settings, roles: ['user', 'admin'] },
   { href: '/admin/users', label: 'Пользователи', icon: Users, roles: ['admin'] },
 ]

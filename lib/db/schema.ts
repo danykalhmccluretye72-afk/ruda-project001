@@ -12,6 +12,7 @@ export const stockpiles = pgTable('stockpiles', {
   initialTonnage: numeric('initial_tonnage', { precision: 14, scale: 3 }).notNull().default('0'),
   auGrade: numeric('au_grade', { precision: 10, scale: 3 }).notNull().default('0'),
   isActive: boolean('is_active').notNull().default(true),
+  isHistorical: boolean('is_historical').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

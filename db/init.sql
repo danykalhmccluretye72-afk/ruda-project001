@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS stockpiles (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+ALTER TABLE stockpiles ADD COLUMN IF NOT EXISTS is_historical boolean NOT NULL DEFAULT false;
+
 CREATE TABLE IF NOT EXISTS loaders (
   id serial PRIMARY KEY,
   name text NOT NULL UNIQUE,

@@ -1,12 +1,13 @@
 'use client'
 
-import { Archive, ArchiveRestore, Pencil, Plus, Scale, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, History, Pencil, Plus, Scale, Trash2 } from 'lucide-react'
 import { useActionState, useCallback, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import {
   addStockpile,
   adjustStockpileBalance,
   deleteStockpile,
+  moveStockpileToHistory,
   toggleStockpileActive,
   updateStockpile,
   type ActionState,
@@ -200,6 +201,34 @@ function ToggleActiveButton({ stockpile }: { stockpile: Stockpile }) {
   )
 }
 
+function MoveToHistoryButton({ stockpile }: { stockpile: StockpileBalance }) {
+  const [pending, startTransition] = useTransition()
+  const hasBalance = Math.abs(stockpile.balance) > 0.0005
+  const label = hasBalance
+    ? 'В историю — только при нулевом остатке'
+    : 'Переместить в исторические данные'
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      disabled={pending}
+      aria-label={`${label}: ${stockpile.name}`}
+      title={label}
+      className={hasBalance ? 'opacity-50' : undefined}
+      onClick={() =>
+        startTransition(async () => {
+          const result = await moveStockpileToHistory(stockpile.id)
+          if (result?.ok) toast.success(result.message)
+          else if (result) toast.error(result.message)
+        })
+      }
+    >
+      <History className="size-4" aria-hidden="true" />
+    </Button>
+  )
+}
+
 function DeleteStockpileDialog({ stockpile }: { stockpile: Stockpile }) {
   const [open, setOpen] = useState(false)
   const [confirmName, setConfirmName] = useState('')
@@ -274,7 +303,10 @@ export function StockpileSettings({ stockpiles }: { stockpiles: StockpileBalance
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <CardTitle>Штабели и исходные остатки</CardTitle>
-          <CardDescription>Архивные штабели скрыты из форм ввода, но сохраняют историю.</CardDescription>
+          <CardDescription>
+            Архивные штабели скрыты из форм ввода, но сохраняют историю. Штабели с нулевым остатком можно перенести во
+            вкладку «Исторические данные».
+          </CardDescription>
         </div>
         <StockpileDialog />
       </CardHeader>
@@ -320,7 +352,8 @@ export function StockpileSettings({ stockpiles }: { stockpiles: StockpileBalance
                       <SurveyDialog stockpile={s} />
                       <StockpileDialog stockpile={s} />
                       <ToggleActiveButton stockpile={s} />
-                    <DeleteStockpileDialog stockpile={s} />
+                      <MoveToHistoryButton stockpile={s} />
+                      <DeleteStockpileDialog stockpile={s} />
                     </div>
                   </TableCell>
                 </TableRow>

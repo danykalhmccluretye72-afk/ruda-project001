@@ -276,6 +276,38 @@ export async function toggleStockpileActive(formData: FormData) {
   revalidateAll()
 }
 
+/** Перенос в «Исторические данные» допускается только при нулевом остатке, чтобы не искажать итоги. */
+export async function moveStockpileToHistory(id: number): Promise<ActionState> {
+  await assertOperator()
+  const pileId = z.coerce.number().int().positive().safeParse(id)
+  if (!pileId.success) return { ok: false, message: 'Штабель не найден' }
+  const pile = (await getBalances()).find((b) => b.id === pileId.data)
+  if (!pile) return { ok: false, message: 'Штабель не найден' }
+  if (Math.abs(pile.balance) > 0.0005) {
+    return {
+      ok: false,
+      message: `Остаток ${formatTons(pile.balance)} т — в историю можно перенести только штабель с нулевым остатком. Уточните остаток маркшейдерским замером.`,
+    }
+  }
+  await db.update(stockpiles).set({ isHistorical: true, isActive: false }).where(eq(stockpiles.id, pileId.data))
+  revalidateAll()
+  return { ok: true, message: `«${pile.name}» перенесён в исторические данные` }
+}
+
+export async function restoreStockpileFromHistory(id: number): Promise<ActionState> {
+  await assertOperator()
+  const pileId = z.coerce.number().int().positive().safeParse(id)
+  if (!pileId.success) return { ok: false, message: 'Штабель не найден' }
+  const [pile] = await db
+    .update(stockpiles)
+    .set({ isHistorical: false, isActive: true })
+    .where(eq(stockpiles.id, pileId.data))
+    .returning({ name: stockpiles.name })
+  if (!pile) return { ok: false, message: 'Штабель не найден' }
+  revalidateAll()
+  return { ok: true, message: `«${pile.name}» возвращён в оборот` }
+}
+
 /* ---------- Планирование ---------- */
 
 const planValue = z.coerce
