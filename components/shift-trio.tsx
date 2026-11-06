@@ -47,11 +47,9 @@ export function ShiftTrio({ columns, balances }: { columns: ShiftColumn[]; balan
           const planT = rows.reduce((s, r) => s + r.plan, 0)
           const factT = rows.reduce((s, r) => s + r.fact, 0)
           const showFact = col.kind !== 'next'
-          const grade = showFact
-            ? (col.report?.grade ?? 0)
-            : planT > 0
-              ? rows.reduce((s, r) => s + r.plan * r.grade, 0) / planT
-              : 0
+          const planGrade =
+            planT > 0 ? rows.reduce((s, r) => s + r.plan * (names.get(r.id)?.grade ?? r.grade), 0) / planT : 0
+          const grade = showFact ? (col.report?.grade ?? 0) : planGrade
 
           return (
             <Card key={col.kind} className={cn(col.kind === 'current' && 'border-primary')}>
@@ -91,7 +89,14 @@ export function ShiftTrio({ columns, balances }: { columns: ShiftColumn[]; balan
                   </div>
                   <div>
                     <dt className="text-muted-foreground">Au, г/т</dt>
-                    <dd className="font-mono text-sm font-semibold tabular-nums">{formatGrade(grade)}</dd>
+                    <dd className="flex flex-col font-mono tabular-nums">
+                      <span className="text-sm font-semibold">{formatGrade(grade)}</span>
+                      {showFact ? (
+                        <span className="text-xs text-muted-foreground">
+                          {planT > 0 ? `план ${formatGrade(planGrade)}` : 'без плана'}
+                        </span>
+                      ) : null}
+                    </dd>
                   </div>
                 </dl>
                 {rows.length === 0 ? (
