@@ -119,12 +119,14 @@ function SurveyDialog({ stockpile }: { stockpile: StockpileBalance }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button
-          variant="ghost"
-          size="icon"
+          variant="outline"
+          size="sm"
           aria-label={`Уточнить остаток по замеру: ${stockpile.name}`}
           title="Уточнить остаток по маркшейдерскому замеру"
+          className="gap-1.5"
         >
           <Scale className="size-4" aria-hidden="true" />
+          Замер
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -288,7 +290,7 @@ export function StockpileSettings({ stockpiles }: { stockpiles: StockpileBalance
                 <TableHead className="text-right">Маркшейд. уточн., т</TableHead>
                 <TableHead className="text-right">Текущий остаток, т</TableHead>
                 <TableHead className="text-right">Au, г/т</TableHead>
-                <TableHead className="w-32">
+                <TableHead className="w-56">
                   <span className="sr-only">Действия</span>
                 </TableHead>
               </TableRow>
@@ -314,7 +316,7 @@ export function StockpileSettings({ stockpiles }: { stockpiles: StockpileBalance
                   <TableCell className="text-right font-mono tabular-nums">{formatTons(s.balance)}</TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{formatGrade(s.auGrade)}</TableCell>
                   <TableCell>
-                    <div className="flex justify-end gap-1">
+                    <div className="flex items-center justify-end gap-1">
                       <SurveyDialog stockpile={s} />
                       <StockpileDialog stockpile={s} />
                       <ToggleActiveButton stockpile={s} />
