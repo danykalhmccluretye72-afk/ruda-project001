@@ -26,12 +26,14 @@ export function ShiftReport({ shift, report, plan, stockpiles }: Props) {
         planned: plan.get(s.id) ?? 0,
         tonnage,
         buckets: fact?.buckets ?? 0,
-        grade: fact && tonnage > 0 ? fact.metalG / tonnage : s.auGrade,
+        planGrade: s.auGrade,
+        grade: fact && tonnage > 0 ? fact.metalG / tonnage : 0,
         metal: fact?.metalG ?? 0,
       }
     })
 
   const plannedT = rows.reduce((s, r) => s + r.planned, 0)
+  const plannedMetal = rows.reduce((s, r) => s + r.planned * r.planGrade, 0)
   const completion = plannedT > 0 ? (report.tonnage / plannedT) * 100 : 0
 
   const stats = [
@@ -83,7 +85,8 @@ export function ShiftReport({ shift, report, plan, stockpiles }: Props) {
                     <TableHead className="text-right">Факт, т</TableHead>
                     <TableHead className="text-right">Откл., т</TableHead>
                     <TableHead className="text-right">Ковши</TableHead>
-                    <TableHead className="text-right">Au, г/т</TableHead>
+                    <TableHead className="text-right">Au план, г/т</TableHead>
+                    <TableHead className="text-right">Au факт, г/т</TableHead>
                     <TableHead className="text-right">Доля</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -106,7 +109,12 @@ export function ShiftReport({ shift, report, plan, stockpiles }: Props) {
                           {r.planned > 0 ? `${diff > 0 ? '+' : diff < 0 ? '−' : ''}${formatTons(Math.abs(diff))}` : '—'}
                         </TableCell>
                         <TableCell className="text-right font-mono tabular-nums">{r.buckets}</TableCell>
-                        <TableCell className="text-right font-mono tabular-nums">{formatGrade(r.grade)}</TableCell>
+                        <TableCell className="text-right font-mono tabular-nums text-muted-foreground">
+                          {formatGrade(r.planGrade)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono tabular-nums">
+                          {r.tonnage > 0 ? formatGrade(r.grade) : '—'}
+                        </TableCell>
                         <TableCell className="text-right font-mono tabular-nums text-muted-foreground">
                           {report.tonnage > 0 ? formatPercent((r.tonnage / report.tonnage) * 100) : '—'}
                         </TableCell>
@@ -123,7 +131,12 @@ export function ShiftReport({ shift, report, plan, stockpiles }: Props) {
                       {plannedT > 0 ? formatTons(report.tonnage - plannedT) : '—'}
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">{report.buckets}</TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">{formatGrade(report.grade)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {plannedT > 0 ? formatGrade(plannedMetal / plannedT) : '—'}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {report.tonnage > 0 ? formatGrade(report.grade) : '—'}
+                    </TableCell>
                     <TableCell />
                   </TableRow>
                 </TableFooter>
