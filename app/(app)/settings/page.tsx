@@ -17,12 +17,12 @@ export default async function SettingsPage() {
         title="Настройки"
         description="Погрузчики и вес ковша, исходные остатки и содержание золота по штабелям. Время — Хабаровск (UTC+10)."
       />
-      <div className="grid gap-6 xl:grid-cols-[400px_1fr]">
-        <LoaderSettings loaders={loaders} />
-        <div className="flex min-w-0 flex-col gap-6">
-          <StockpileSettings stockpiles={piles} />
-          <SurveyJournal entries={surveys} />
+      <div className="flex min-w-0 flex-col gap-6">
+        <div className="max-w-xl">
+          <LoaderSettings loaders={loaders} />
         </div>
+        <StockpileSettings stockpiles={piles} />
+        <SurveyJournal entries={surveys} />
       </div>
     </>
   )
