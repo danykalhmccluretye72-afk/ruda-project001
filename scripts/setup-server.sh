@@ -249,7 +249,11 @@ start_stack() {
   compose up -d db
   wait_db
   migrate
-  compose up -d --build --remove-orphans
+  compose build --pull app
+  compose up -d --remove-orphans
+  # Без этого compose иногда оставляет контейнер на старом образе.
+  compose up -d --no-deps --force-recreate app
+  $DOCKER image prune -f >/dev/null 2>&1 || true
   open_web_ports
   local host; host="$(env_get BETTER_AUTH_URL | sed -E 's#^https?://##; s#/.*$##')"
   [ -n "$(env_get TRUSTED_ORIGINS)" ] || set_trusted_origins "$(env_get BETTER_AUTH_URL)"
