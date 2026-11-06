@@ -2,6 +2,10 @@ import { betterAuth } from 'better-auth'
 import { APIError, createAuthMiddleware } from 'better-auth/api'
 import { nextCookies } from 'better-auth/next-js'
 import { admin } from 'better-auth/plugins'
+import { createAccessControl } from 'better-auth/plugins/access'
+import { adminAc, defaultStatements, userAc } from 'better-auth/plugins/admin/access'
+
+const accessControl = createAccessControl(defaultStatements)
 import { pool } from '@/lib/db'
 
 async function countUsers() {
@@ -35,6 +39,11 @@ export const auth = betterAuth({
       : []),
     ...(process.env.NODE_ENV === 'production'
       ? [
+          // Self-hosted servers are often reachable by several addresses (LAN IP, hostname).
+          ...(process.env.TRUSTED_ORIGINS ?? '')
+            .split(',')
+            .map((origin) => origin.trim())
+            .filter(Boolean),
           ...(process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL}`] : []),
           ...(process.env.VERCEL_PROJECT_PRODUCTION_URL
             ? [`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`]
@@ -64,7 +73,15 @@ export const auth = betterAuth({
       }
     }),
   },
-  plugins: [admin({ defaultRole: 'user', adminRoles: ['admin'] }), nextCookies()],
+  plugins: [
+    admin({
+      defaultRole: 'user',
+      adminRoles: ['admin'],
+      ac: accessControl,
+      roles: { admin: adminAc, user: userAc, info: userAc, kirankan: userAc },
+    }),
+    nextCookies(),
+  ],
   ...(process.env.NODE_ENV === 'development'
     ? {
         advanced: {

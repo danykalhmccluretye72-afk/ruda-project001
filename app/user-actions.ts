@@ -3,13 +3,12 @@
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
+import { normalizeRole, type Role } from '@/lib/roles'
 import { assertAdmin } from '@/lib/session'
 import type { ActionState } from '@/app/actions'
 
-type Role = 'admin' | 'user'
-
 function parseRole(value: FormDataEntryValue | null): Role {
-  return value === 'admin' ? 'admin' : 'user'
+  return normalizeRole(value)
 }
 
 function errorMessage(e: unknown, fallback: string) {

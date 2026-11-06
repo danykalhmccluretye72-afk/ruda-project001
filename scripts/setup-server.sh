@@ -33,7 +33,41 @@ env_set() {
 public_ip() {
   curl -fsS --max-time 5 https://ifconfig.me 2>/dev/null \
     || curl -fsS --max-time 5 https://api.ipify.org 2>/dev/null \
-    || hostname -I | awk '{print $1}'
+    || local_ip
+}
+
+# IPv4-адреса сетевых интерфейсов сервера (без docker/loopback).
+server_ips() {
+  hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' \
+    | grep -vE '^(127\.|172\.(1[7-9]|2[0-9]|3[01])\.)' || true
+}
+
+# Адрес основного интерфейса — тот, через который сервер виден в локальной сети.
+local_ip() {
+  local ip
+  ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="src"){print $(i+1); exit}}')"
+  [ -n "$ip" ] || ip="$(server_ips | head -n1)"
+  printf '%s' "$ip"
+}
+
+is_ipv4() { [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(:[0-9]+)?$ ]]; }
+
+# Разрешаем вход по любому адресу сервера, а не только по основному.
+set_trusted_origins() {
+  local main="$1" list="$1" ip
+  for ip in $(server_ips); do
+    [ "http://${ip}" = "$main" ] || list="${list},http://${ip}"
+  done
+  env_set TRUSTED_ORIGINS "$list"
+}
+
+ask_address() {
+  local ips; ips="$(server_ips | tr '\n' ' ')"
+  echo "Адреса этого сервера: ${ips:-не найдены}" >&2
+  local def; def="$(local_ip)"
+  local answer
+  read -r -p "Домен или IP для открытия сайта [${def}]: " answer
+  printf '%s' "${answer:-$def}"
 }
 
 # ---------- системные пакеты и Docker ----------
@@ -98,10 +132,14 @@ remove_nginx() {
     $SUDO rm -rf /etc/nginx/sites-enabled/ore-stock /etc/nginx/sites-available/ore-stock
   fi
   env_set COMPOSE_PROFILES caddy
-  if command -v ufw >/dev/null 2>&1 && $SUDO ufw status | grep -q "Status: active"; then
+  start_stack
+}
+
+# Purging nginx also removes its ufw app profile ("Nginx Full"), which silently closes port 80.
+open_web_ports() {
+  if command -v ufw >/dev/null 2>&1 && $SUDO ufw status 2>/dev/null | grep -q "Status: active"; then
     $SUDO ufw allow 80/tcp >/dev/null; $SUDO ufw allow 443/tcp >/dev/null
   fi
-  start_stack
 }
 
 configure_nginx_site() {
@@ -119,13 +157,16 @@ apply_domain() {
   input="$(printf '%s' "$input" | sed -E 's#^https?://##; s#/.*$##' | tr 'A-Z' 'a-z')"
   local web; web="$(env_get COMPOSE_PROFILES)"
 
-  if [ -z "$input" ] || [ "$input" = "ip" ]; then
-    local ip; ip="$(public_ip)"
+  if [ -z "$input" ] || [ "$input" = "ip" ] || is_ipv4 "$input"; then
+    local ip="$input"
+    { [ -z "$ip" ] || [ "$ip" = "ip" ]; } && ip="$(local_ip)"
     env_set DOMAIN ":80"
     env_set BETTER_AUTH_URL "http://${ip}"
+    set_trusted_origins "http://${ip}"
     [ "$web" != "caddy" ] && nginx_installed && configure_nginx_site "_"
     echo "Доступ по IP: http://${ip}"
   else
+    set_trusted_origins "http${web:+s}://${input}"
     if [ "$web" = "caddy" ]; then
       env_set DOMAIN "$input"
       env_set BETTER_AUTH_URL "https://${input}"
@@ -147,7 +188,7 @@ change_domain() {
   local new="${1-__ask__}"
   if [ "$new" = "__ask__" ]; then
     echo "Текущий адрес: $(env_get BETTER_AUTH_URL)"
-    read -r -p "Новый домен (например sklad.fabrika.ru). Пусто — доступ по IP: " new
+    new="$(ask_address)"
   fi
   apply_domain "$new"
   start_stack
@@ -182,7 +223,7 @@ ensure_env() {
     if [ -n "$d" ] && [ "$d" != ":80" ]; then
       apply_domain "$d"
     else
-      read -r -p "Домен (например sklad.fabrika.ru). Пусто — доступ по IP без HTTPS: " d
+      d="$(ask_address)"
       apply_domain "$d"
     fi
   fi
@@ -209,8 +250,11 @@ start_stack() {
   wait_db
   migrate
   compose up -d --build --remove-orphans
+  open_web_ports
+  local host; host="$(env_get BETTER_AUTH_URL | sed -E 's#^https?://##; s#/.*$##')"
+  [ -n "$(env_get TRUSTED_ORIGINS)" ] || set_trusted_origins "$(env_get BETTER_AUTH_URL)"
   if [ "$(env_get COMPOSE_PROFILES)" != "caddy" ] && nginx_installed; then
-    configure_nginx_site "$(env_get BETTER_AUTH_URL | sed -E 's#^https?://##; s#/.*$##')" || true
+    if is_ipv4 "$host"; then configure_nginx_site "_" || true; else configure_nginx_site "$host" || true; fi
   fi
   sleep 3
   compose ps

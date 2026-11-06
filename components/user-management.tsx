@@ -28,12 +28,13 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useActionToast } from '@/hooks/use-action-toast'
+import { ROLE_DESCRIPTIONS, ROLE_LABELS, type Role } from '@/lib/roles'
 
 export type ManagedUser = {
   id: string
   name: string
   email: string
-  role: 'admin' | 'user'
+  role: Role
   banned: boolean
   createdAt: string
 }
@@ -84,8 +85,10 @@ function CreateUserDialog() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="user">Оператор — ввод данных</SelectItem>
-                <SelectItem value="admin">Администратор — настройки и пользователи</SelectItem>
+                <SelectItem value="info">{ROLE_DESCRIPTIONS.info}</SelectItem>
+                <SelectItem value="user">{ROLE_DESCRIPTIONS.user}</SelectItem>
+                <SelectItem value="kirankan">{ROLE_DESCRIPTIONS.kirankan}</SelectItem>
+                <SelectItem value="admin">{ROLE_DESCRIPTIONS.admin}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -224,12 +227,14 @@ function UserRow({ user, isSelf }: { user: ManagedUser; isSelf: boolean }) {
               })
             }
           >
-            <SelectTrigger className="w-40" aria-label={`Роль ${user.email}`}>
+            <SelectTrigger className="w-48" aria-label={`Роль ${user.email}`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="user">Оператор</SelectItem>
-              <SelectItem value="admin">Администратор</SelectItem>
+              <SelectItem value="info">{ROLE_LABELS.info}</SelectItem>
+              <SelectItem value="user">{ROLE_LABELS.user}</SelectItem>
+              <SelectItem value="kirankan">{ROLE_LABELS.kirankan}</SelectItem>
+              <SelectItem value="admin">{ROLE_LABELS.admin}</SelectItem>
             </SelectContent>
           </Select>
         )}

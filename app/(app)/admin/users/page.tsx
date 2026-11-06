@@ -2,6 +2,7 @@ import { headers } from 'next/headers'
 import { PageHeader } from '@/components/page-header'
 import { UserManagement, type ManagedUser } from '@/components/user-management'
 import { auth } from '@/lib/auth'
+import { normalizeRole } from '@/lib/roles'
 import { requireAdminPage } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
@@ -17,7 +18,7 @@ export default async function UsersPage() {
     id: u.id,
     name: u.name,
     email: u.email,
-    role: u.role === 'admin' ? 'admin' : 'user',
+    role: normalizeRole(u.role),
     banned: Boolean(u.banned),
     createdAt: new Date(u.createdAt).toISOString(),
   }))

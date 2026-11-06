@@ -3,12 +3,12 @@ import { FeedsTable } from '@/components/feeds-table'
 import { PageHeader } from '@/components/page-header'
 import { getLoaders, getRecentFeeds, getStockpiles } from '@/lib/queries'
 
-import { requireUser } from '@/lib/session'
+import { requireOperatorPage } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
 export default async function FeedsPage() {
-  await requireUser()
+  await requireOperatorPage()
   const [piles, feeds, loaders] = await Promise.all([
     getStockpiles({ activeOnly: true }),
     getRecentFeeds(),

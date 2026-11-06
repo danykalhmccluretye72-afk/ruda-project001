@@ -38,7 +38,7 @@ export function ShiftPicker({ path, value, current }: { path: string; value: Shi
           Смена
         </Label>
         <Select value={String(value.shift)} onValueChange={(v) => go({ date: value.date, shift: v === '1' ? 1 : 2 })}>
-          <SelectTrigger id="shift-no" className="w-48">
+          <SelectTrigger id="shift-no" className="w-auto min-w-60 whitespace-nowrap">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
