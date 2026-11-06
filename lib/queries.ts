@@ -172,16 +172,17 @@ async function getPeriodBalanceReport(start: Date, end: Date): Promise<ShiftBala
   const openMap = new Map(opening.map((b) => [b.id, b]))
   return closing.map((c) => {
     const o = openMap.get(c.id)
+    const adj = c.adjusted - (o?.adjusted ?? 0)
     return {
       id: c.id,
       name: c.name,
       isActive: c.isActive,
       auGrade: c.auGrade,
       opening: o?.balance ?? c.initialTonnage,
-      received: c.received - (o?.received ?? 0),
+      received: c.received - (o?.received ?? 0) + Math.max(adj, 0),
       crushedIn: c.crushedIn - (o?.crushedIn ?? 0),
       crushedOut: c.crushedOut - (o?.crushedOut ?? 0),
-      fed: c.fed - (o?.fed ?? 0),
+      fed: c.fed - (o?.fed ?? 0) + Math.max(-adj, 0),
       closing: c.balance,
     }
   })
@@ -431,13 +432,15 @@ export async function getCurrentShiftBalances(key: ShiftKey): Promise<StockpileB
   const openingById = new Map(opening.map((b) => [b.id, b]))
   return now.map((b) => {
     const o = openingById.get(b.id)
+    const adj = b.adjusted - (o?.adjusted ?? 0)
+    // Маркшейдерские корректировки в движении: «+» — поступление, «−» — списание.
     return {
       ...b,
-      received: b.received - (o?.received ?? 0),
-      fed: b.fed - (o?.fed ?? 0),
+      received: b.received - (o?.received ?? 0) + Math.max(adj, 0),
+      fed: b.fed - (o?.fed ?? 0) + Math.max(-adj, 0),
       crushedIn: b.crushedIn - (o?.crushedIn ?? 0),
       crushedOut: b.crushedOut - (o?.crushedOut ?? 0),
-      adjusted: b.adjusted - (o?.adjusted ?? 0),
+      adjusted: adj,
     }
   })
 }
