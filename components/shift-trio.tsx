@@ -130,7 +130,11 @@ export function ShiftTrio({ columns, balances }: { columns: ShiftColumn[]; balan
                             {showFact ? (
                               <>
                                 <span className="font-semibold">{formatTons(r.fact)}</span>
-                                <span className="text-muted-foreground"> / {formatTons(r.plan)}</span>
+                                {r.plan > 0 ? (
+                                  <span className="text-muted-foreground"> / {formatTons(r.plan)}</span>
+                                ) : (
+                                  <span className="text-destructive"> вне плана</span>
+                                )}
                               </>
                             ) : (
                               <span className="font-semibold">{formatTons(r.plan)}</span>
