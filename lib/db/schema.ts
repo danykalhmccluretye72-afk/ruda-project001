@@ -85,6 +85,7 @@ export const kirankanStockpiles = pgTable('kirankan_stockpiles', {
   id: serial('id').primaryKey(),
   name: text('name').notNull().unique(),
   auGrade: numeric('au_grade', { precision: 10, scale: 3 }).notNull().default('0'),
+  isHistorical: boolean('is_historical').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

@@ -478,8 +478,13 @@ export type KirankanBalance = KirankanStockpile & {
   balance: number
 }
 
-export async function getKirankanStockpiles(): Promise<KirankanStockpile[]> {
-  const rows = await db.select().from(kirankanStockpiles).orderBy(asc(kirankanStockpiles.name))
+/** По умолчанию — только штабели в обороте; исторические показываются отдельным блоком на вкладке Киранкан. */
+export async function getKirankanStockpiles({ historical = false } = {}): Promise<KirankanStockpile[]> {
+  const rows = await db
+    .select()
+    .from(kirankanStockpiles)
+    .where(eq(kirankanStockpiles.isHistorical, historical))
+    .orderBy(asc(kirankanStockpiles.name))
   return rows.map((r) => ({ id: r.id, name: r.name, auGrade: Number(r.auGrade) }))
 }
 

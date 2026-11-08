@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS kirankan_stockpiles (
   au_grade numeric(10,3) NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE kirankan_stockpiles ADD COLUMN IF NOT EXISTS is_historical boolean NOT NULL DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS kirankan_receipts (
   id serial PRIMARY KEY,

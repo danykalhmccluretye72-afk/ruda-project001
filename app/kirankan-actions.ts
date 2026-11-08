@@ -127,6 +127,35 @@ export async function deleteKirankanStockpile(id: number, confirmName: string): 
   return { ok: true, message: `Штабель «${pile.name}» удалён` }
 }
 
+/** В историю — только при нулевом остатке, чтобы не искажать общие итоги. */
+export async function moveKirankanToHistory(id: number): Promise<ActionState> {
+  await assertKirankan()
+  const pile = await getPile(id)
+  if (!pile) return { ok: false, message: 'Штабель не найден' }
+  const balance = await getPileBalance(id)
+  if (Math.abs(balance) > 0.0005) {
+    return {
+      ok: false,
+      message: `Остаток ${formatTons(balance)} т — в историю можно убрать только штабель с нулевым остатком. Уточните остаток.`,
+    }
+  }
+  await db.update(kirankanStockpiles).set({ isHistorical: true }).where(eq(kirankanStockpiles.id, id))
+  revalidateAll()
+  return { ok: true, message: `«${pile.name}» убран в историю` }
+}
+
+export async function restoreKirankanFromHistory(id: number): Promise<ActionState> {
+  await assertKirankan()
+  const [pile] = await db
+    .update(kirankanStockpiles)
+    .set({ isHistorical: false })
+    .where(eq(kirankanStockpiles.id, id))
+    .returning({ name: kirankanStockpiles.name })
+  if (!pile) return { ok: false, message: 'Штабель не найден' }
+  revalidateAll()
+  return { ok: true, message: `«${pile.name}» возвращён в оборот` }
+}
+
 /* ---------- Поступление и отгрузка ---------- */
 
 const movementSchema = z.object({

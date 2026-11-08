@@ -1,6 +1,6 @@
 'use client'
 
-import { Pencil, Plus, Scale, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, Pencil, Plus, Scale, Trash2 } from 'lucide-react'
 import { useActionState, useCallback, useRef, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import type { ActionState } from '@/app/actions'
@@ -11,6 +11,8 @@ import {
   adjustKirankanBalance,
   deleteKirankanEntry,
   deleteKirankanStockpile,
+  moveKirankanToHistory,
+  restoreKirankanFromHistory,
   updateKirankanStockpile,
 } from '@/app/kirankan-actions'
 import { Badge } from '@/components/ui/badge'
@@ -31,7 +33,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useActionToast } from '@/hooks/use-action-toast'
-import type { KirankanBalance, KirankanJournalEntry } from '@/lib/queries'
+import type { KirankanBalance, KirankanJournalEntry, KirankanStockpile } from '@/lib/queries'
 import { toKhvInputValue } from '@/lib/shift'
 import { formatDateTime, formatGrade, formatTons } from '@/lib/utils'
 
@@ -225,6 +227,40 @@ function DeleteDialog({ stockpile }: { stockpile: KirankanBalance }) {
   )
 }
 
+/* ---------- История ---------- */
+
+function HistoryButton({ stockpile, restore }: { stockpile: KirankanStockpile; restore?: boolean }) {
+  const [pending, startTransition] = useTransition()
+  const label = restore ? `Вернуть ${stockpile.name} в оборот` : `Убрать ${stockpile.name} в историю`
+  return (
+    <Button
+      variant={restore ? 'outline' : 'ghost'}
+      size={restore ? 'sm' : 'icon'}
+      disabled={pending}
+      aria-label={label}
+      title={label}
+      onClick={() =>
+        startTransition(async () => {
+          const result = restore
+            ? await restoreKirankanFromHistory(stockpile.id)
+            : await moveKirankanToHistory(stockpile.id)
+          if (result?.ok) toast.success(result.message)
+          else if (result) toast.error(result.message)
+        })
+      }
+    >
+      {restore ? (
+        <>
+          <ArchiveRestore className="size-4" aria-hidden="true" />
+          Вернуть в оборот
+        </>
+      ) : (
+        <Archive className="size-4" aria-hidden="true" />
+      )}
+    </Button>
+  )
+}
+
 /* ---------- Поступление / отгрузка ---------- */
 
 function MovementForm({ kind, stockpiles }: { kind: 'receipt' | 'shipment'; stockpiles: KirankanBalance[] }) {
@@ -345,9 +381,11 @@ function DeleteEntryButton({ entry }: { entry: KirankanJournalEntry }) {
 export function KirankanManager({
   balances,
   journal,
+  history,
 }: {
   balances: KirankanBalance[]
   journal: KirankanJournalEntry[]
+  history: KirankanStockpile[]
 }) {
   return (
     <div className="flex flex-col gap-6">
@@ -409,8 +447,49 @@ export function KirankanManager({
                       <div className="flex justify-end gap-1">
                         <AdjustDialog stockpile={b} />
                         <StockpileDialog stockpile={b} />
+                        {Math.abs(b.balance) <= 0.0005 ? <HistoryButton stockpile={b} /> : null}
                         <DeleteDialog stockpile={b} />
                       </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>История Киранкан</CardTitle>
+          <CardDescription>
+            Отработанные штабели с нулевым остатком. Не участвуют в остатках и операциях, пока не возвращены в оборот.
+            Убрать в историю можно кнопкой с архивом у штабеля с нулевым остатком.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {history.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">В истории штабелей нет.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Штабель</TableHead>
+                  <TableHead className="text-right">Au, г/т</TableHead>
+                  <TableHead className="w-48 text-right">
+                    <span className="sr-only">Действия</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {history.map((h) => (
+                  <TableRow key={h.id}>
+                    <TableCell className="font-medium text-muted-foreground">{h.name}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums text-muted-foreground">
+                      {formatGrade(h.auGrade)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <HistoryButton stockpile={h} restore />
                     </TableCell>
                   </TableRow>
                 ))}
