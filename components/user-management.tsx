@@ -65,7 +65,7 @@ function CreateUserDialog() {
           <DialogTitle>Новый пользователь</DialogTitle>
           <DialogDescription>Передайте пользователю email и пароль лично. Пароль он не сможет восстановить сам.</DialogDescription>
         </DialogHeader>
-        <form action={formAction} className="flex flex-col gap-4">
+          <form action={formAction} className="flex min-w-0 flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="new-user-name">Имя</Label>
             <Input id="new-user-name" name="name" required maxLength={100} placeholder="Иванов И. И." />
@@ -81,7 +81,7 @@ function CreateUserDialog() {
           <div className="flex flex-col gap-2">
             <Label htmlFor="new-user-role">Роль</Label>
             <Select name="role" defaultValue="user">
-              <SelectTrigger id="new-user-role">
+              <SelectTrigger id="new-user-role" className="w-full min-w-0 *:data-[slot=select-value]:min-w-0">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
