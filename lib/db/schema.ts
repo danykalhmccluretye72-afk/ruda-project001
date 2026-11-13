@@ -39,7 +39,7 @@ export const oreFeeds = pgTable('ore_feeds', {
   id: serial('id').primaryKey(),
   stockpileId: integer('stockpile_id').notNull(),
   occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
-  bucketCount: integer('bucket_count').notNull(),
+  bucketCount: numeric('bucket_count', { precision: 10, scale: 1, mode: 'number' }).notNull(),
   bucketWeightT: numeric('bucket_weight_t', { precision: 10, scale: 3 }).notNull(),
   loader: text('loader'),
   loaderId: integer('loader_id'),
@@ -67,7 +67,7 @@ export const crushingLines = pgTable('crushing_lines', {
   id: serial('id').primaryKey(),
   opId: integer('op_id').notNull(),
   sourceStockpileId: integer('source_stockpile_id').notNull(),
-  bucketCount: integer('bucket_count').notNull(),
+  bucketCount: numeric('bucket_count', { precision: 10, scale: 1, mode: 'number' }).notNull(),
   auGrade: numeric('au_grade', { precision: 10, scale: 3 }).notNull().default('0'),
 })
 

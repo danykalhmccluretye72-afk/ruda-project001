@@ -103,9 +103,9 @@ export function FeedForm({ stockpiles, loaders }: { stockpiles: Stockpile[]; loa
               id="feed-buckets"
               name="bucketCount"
               type="number"
-              inputMode="numeric"
-              step="1"
-              min="1"
+              inputMode="decimal"
+              step="0.1"
+              min="0.1"
               max="10000"
               required
               className="font-mono"

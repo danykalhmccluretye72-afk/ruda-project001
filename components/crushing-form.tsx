@@ -137,9 +137,9 @@ export function CrushingForm({ stockpiles, loaders }: { stockpiles: Stockpile[];
                     id={`crush-b-${line.key}`}
                     name="buckets"
                     type="number"
-                    inputMode="numeric"
-                    min="1"
-                    step="1"
+                    inputMode="decimal"
+                    min="0.1"
+                    step="0.1"
                     placeholder="Ковши"
                     value={line.buckets}
                     onChange={(e) => updateLine(line.key, { buckets: e.target.value })}
@@ -213,7 +213,7 @@ export function CrushingForm({ stockpiles, loaders }: { stockpiles: Stockpile[];
 
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
             <span className="text-muted-foreground">Итого:</span>
-            <span className="font-medium tabular-nums">{totals.buckets} ковш.</span>
+            <span className="font-medium tabular-nums">{Math.round(totals.buckets * 10) / 10} ковш.</span>
             <span className="text-muted-foreground">=</span>
             <span className="font-semibold tabular-nums">{formatTons(totals.tonnage)} т</span>
             {totals.tonnage > 0 ? (

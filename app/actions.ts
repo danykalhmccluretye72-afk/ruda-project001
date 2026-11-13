@@ -122,7 +122,7 @@ const feedSchema = z.object({
   occurredAt: occurredAtSchema,
   bucketCount: z.coerce
     .number({ message: 'Количество ковшей: введите число' })
-    .int('Количество ковшей должно быть целым')
+    .refine((v) => Math.abs(v * 10 - Math.round(v * 10)) < 1e-6, 'Количество ковшей: не более одного знака после запятой')
     .positive('Количество ковшей должно быть больше нуля')
     .max(10000, 'Количество ковшей: не более 10000 за запись'),
   note: optionalText,
@@ -453,11 +453,14 @@ const crushingSchema = z.object({
   note: optionalText,
 })
 
-const crushingBuckets = z.coerce
+const crushingBuckets = z.preprocess(
+  (v) => (typeof v === 'string' ? v.replace(',', '.') : v),
+  z.coerce
   .number({ message: 'Количество ковшей: введите число' })
-  .int('Количество ковшей должно быть целым')
+  .refine((v) => Math.abs(v * 10 - Math.round(v * 10)) < 1e-6, 'Количество ковшей: не более одного знака после запятой')
   .positive('Количество ковшей должно быть больше нуля')
-  .max(10000, 'Количество ковшей: не более 10000 на штабель')
+  .max(10000, 'Количество ковшей: не более 10000 на штабель'),
+)
 
 export async function addCrushing(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await assertOperator()

@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS ore_feeds (
   id serial PRIMARY KEY,
   stockpile_id integer NOT NULL,
   occurred_at timestamptz NOT NULL DEFAULT now(),
-  bucket_count integer NOT NULL,
+  bucket_count numeric(10,1) NOT NULL,
   bucket_weight_t numeric(10,3) NOT NULL,
   loader text,
   loader_id integer,
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS crushing_lines (
   id serial PRIMARY KEY,
   op_id integer NOT NULL REFERENCES crushing_ops(id) ON DELETE CASCADE,
   source_stockpile_id integer NOT NULL,
-  bucket_count integer NOT NULL,
+  bucket_count numeric(10,1) NOT NULL,
   au_grade numeric(10,3) NOT NULL DEFAULT 0
 );
 
@@ -173,3 +173,6 @@ CREATE INDEX IF NOT EXISTS stockpile_adjustments_pile_idx ON stockpile_adjustmen
 
 INSERT INTO loaders (name, bucket_weight_t)
 SELECT 'Погрузчик №1', 5 WHERE NOT EXISTS (SELECT 1 FROM loaders);
+
+ALTER TABLE ore_feeds ALTER COLUMN bucket_count TYPE numeric(10,1);
+ALTER TABLE crushing_lines ALTER COLUMN bucket_count TYPE numeric(10,1);
