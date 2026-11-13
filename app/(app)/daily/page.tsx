@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { buildDailyReport, percent, type FeedTotals } from '@/lib/daily-report'
-import { requireUser } from '@/lib/session'
+import { requireViewerPage } from '@/lib/session'
 import { formatShiftDate, getShift, parseShiftKey, shiftHours } from '@/lib/shift'
 import { cn, formatGrade, formatMetal, formatPercent, formatTons } from '@/lib/utils'
 
@@ -46,7 +46,7 @@ export default async function DailyReportPage({
 }: {
   searchParams: Promise<{ date?: string; archive?: string }>
 }) {
-  await requireUser()
+  await requireViewerPage()
   const params = await searchParams
   const today = getShift(new Date()).date
   const date = parseShiftKey(params.date, '1')?.date ?? today

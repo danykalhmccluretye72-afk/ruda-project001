@@ -88,6 +88,7 @@ function CreateUserDialog() {
                 <SelectItem value="info">{ROLE_DESCRIPTIONS.info}</SelectItem>
                 <SelectItem value="user">{ROLE_DESCRIPTIONS.user}</SelectItem>
                 <SelectItem value="kirankan">{ROLE_DESCRIPTIONS.kirankan}</SelectItem>
+                <SelectItem value="loader">{ROLE_DESCRIPTIONS.loader}</SelectItem>
                 <SelectItem value="admin">{ROLE_DESCRIPTIONS.admin}</SelectItem>
               </SelectContent>
             </Select>
@@ -234,6 +235,7 @@ function UserRow({ user, isSelf }: { user: ManagedUser; isSelf: boolean }) {
               <SelectItem value="info">{ROLE_LABELS.info}</SelectItem>
               <SelectItem value="user">{ROLE_LABELS.user}</SelectItem>
               <SelectItem value="kirankan">{ROLE_LABELS.kirankan}</SelectItem>
+              <SelectItem value="loader">{ROLE_LABELS.loader}</SelectItem>
               <SelectItem value="admin">{ROLE_LABELS.admin}</SelectItem>
             </SelectContent>
           </Select>

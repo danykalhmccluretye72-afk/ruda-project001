@@ -776,3 +776,64 @@ export async function getStockpileAdjustments(limit = 50): Promise<StockpileAdju
     .limit(limit)
   return rows.map((r) => ({ ...r, stockpileName: r.stockpileName ?? '—', deltaT: Number(r.deltaT) }))
 }
+
+export type LoaderShiftPlanRow = { stockpileId: number; name: string; auGrade: number; plannedT: number; fedT: number }
+export type LoaderShiftFeed = {
+  id: number
+  stockpileId: number
+  stockpileName: string | null
+  bucketCount: number
+  loaderId: number | null
+  occurredAt: string
+}
+
+/** Задание шихты на смену и фактическая подача ковшами (без дробления — это не подача). */
+export async function getLoaderShiftState(key: ShiftKey): Promise<{ rows: LoaderShiftPlanRow[]; recent: LoaderShiftFeed[] }> {
+  const shiftFilter = and(eq(oreFeeds.shiftDate, key.date), eq(oreFeeds.shiftNo, key.shift))
+  const [plans, fedTotals, recent] = await Promise.all([
+    db
+      .select({
+        stockpileId: shiftPlans.stockpileId,
+        plannedT: shiftPlans.plannedT,
+        name: stockpiles.name,
+        auGrade: stockpiles.auGrade,
+      })
+      .from(shiftPlans)
+      .innerJoin(stockpiles, eq(stockpiles.id, shiftPlans.stockpileId))
+      .where(and(eq(shiftPlans.shiftDate, key.date), eq(shiftPlans.shiftNo, key.shift))),
+    db
+      .select({
+        stockpileId: oreFeeds.stockpileId,
+        fedT: sql<string>`coalesce(sum(${oreFeeds.bucketCount} * ${oreFeeds.bucketWeightT}), 0)`,
+      })
+      .from(oreFeeds)
+      .where(shiftFilter)
+      .groupBy(oreFeeds.stockpileId),
+    db
+      .select({
+        id: oreFeeds.id,
+        stockpileId: oreFeeds.stockpileId,
+        stockpileName: stockpiles.name,
+        bucketCount: oreFeeds.bucketCount,
+        loaderId: oreFeeds.loaderId,
+        occurredAt: oreFeeds.occurredAt,
+      })
+      .from(oreFeeds)
+      .leftJoin(stockpiles, eq(stockpiles.id, oreFeeds.stockpileId))
+      .where(shiftFilter)
+      .orderBy(desc(oreFeeds.occurredAt), desc(oreFeeds.id))
+      .limit(5),
+  ])
+  const fed = new Map(fedTotals.map((r) => [r.stockpileId, Number(r.fedT)]))
+  const rows = plans
+    .map((p) => ({
+      stockpileId: p.stockpileId,
+      name: p.name,
+      auGrade: Number(p.auGrade),
+      plannedT: Number(p.plannedT),
+      fedT: fed.get(p.stockpileId) ?? 0,
+    }))
+    .filter((r) => r.plannedT > 0)
+    .sort((a, b) => b.plannedT - a.plannedT || a.name.localeCompare(b.name, 'ru'))
+  return { rows, recent: recent.map((r) => ({ ...r, occurredAt: r.occurredAt.toISOString() })) }
+}

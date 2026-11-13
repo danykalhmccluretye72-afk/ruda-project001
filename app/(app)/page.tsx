@@ -14,13 +14,13 @@ import {
   getShiftPlan,
 } from '@/lib/queries'
 import { canEdit, canManageKirankan } from '@/lib/roles'
-import { requireUser } from '@/lib/session'
+import { requireViewerPage } from '@/lib/session'
 import { getShift, nextShift, parseShiftKey, prevShift } from '@/lib/shift'
 
 export const dynamic = 'force-dynamic'
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ date?: string; shift?: string }> }) {
-  const user = await requireUser()
+  const user = await requireViewerPage()
   const params = await searchParams
   const now = getShift(new Date())
   const current = parseShiftKey(params.date, params.shift) ?? now

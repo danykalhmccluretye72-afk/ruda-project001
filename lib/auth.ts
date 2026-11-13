@@ -78,7 +78,7 @@ export const auth = betterAuth({
       defaultRole: 'user',
       adminRoles: ['admin'],
       ac: accessControl,
-      roles: { admin: adminAc, user: userAc, info: userAc, kirankan: userAc },
+      roles: { admin: adminAc, user: userAc, info: userAc, kirankan: userAc, loader: userAc },
     }),
     nextCookies(),
   ],
