@@ -63,8 +63,8 @@ export function BalanceTable({
       <CardHeader>
         <CardTitle>Остатки по штабелям Перевальное</CardTitle>
         <CardDescription>
-          Текущий остаток и движение за текущую смену, тонны.
-          {showSurvey ? ' Маркшейдерский замер — накопленная корректировка, на подачу не влияет.' : null}
+          Остаток на конец смены и движение за выбранную смену, тонны.
+          {showSurvey ? ' Маркшейдерский замер — корректировка за выбранную смену, на подачу не влияет.' : null}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -94,7 +94,7 @@ export function BalanceTable({
                 {showSurvey ? (
                   <TableHead className="text-right">
                     <abbr
-                      title="Маркшейдерский замер: накопленная корректировка массы, не входит в поступление и подачу"
+                      title="Маркшейдерский замер: корректировка массы за выбранную смену, не входит в поступление и подачу"
                       className="no-underline"
                     >
                       Маркш. замер

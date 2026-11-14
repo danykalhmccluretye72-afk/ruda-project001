@@ -5,7 +5,7 @@ import { ReportFilters } from '@/components/report-filters'
 import { ReportTable } from '@/components/report-table'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { DEFAULT_SORT, SCOPE_LABELS, SITE_LABELS, VIEW_DESCRIPTIONS, VIEW_LABELS, reportQuery, type ReportView } from '@/lib/report-columns'
+import { DEFAULT_SORT, SCOPE_LABELS, SITE_LABELS, SITE_VIEWS, VIEW_DESCRIPTIONS, VIEW_LABELS, reportQuery } from '@/lib/report-columns'
 import { buildReport, getReportPiles, parseReportFilters } from '@/lib/reports'
 import { requireOperatorPage } from '@/lib/session'
 import { formatShiftDate, getShift } from '@/lib/shift'
@@ -14,7 +14,6 @@ import { cn } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
 
 const UI_LIMIT = 1000
-const VIEWS: ReportView[] = ['summary', 'journal', 'shifts']
 
 export default async function ReportsPage({
   searchParams,
@@ -48,7 +47,7 @@ export default async function ReportsPage({
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <nav aria-label="Вид отчёта" className="flex flex-wrap gap-1 rounded-lg border bg-muted/40 p-1">
-          {VIEWS.map((v) => (
+          {SITE_VIEWS[filters.site].map((v) => (
             <Link
               key={v}
               href={`/reports?${reportQuery(filters, { view: v, ...DEFAULT_SORT[v] })}`}

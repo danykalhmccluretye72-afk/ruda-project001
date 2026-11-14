@@ -22,6 +22,7 @@ import {
   DEFAULT_SORT,
   JOURNAL_TYPES,
   SITE_SCOPES,
+  SITE_VIEWS,
   reportColumns,
   type ReportFilters,
   type ReportScope,
@@ -53,7 +54,7 @@ export function parseReportFilters(sp: Record<string, string | string[] | undefi
   }
   const site: ReportSite = get('site') === 'kirankan' ? 'kirankan' : 'pereval'
   const viewRaw = get('view')
-  const view: ReportView = viewRaw === 'journal' || viewRaw === 'shifts' ? viewRaw : 'summary'
+  const view: ReportView = SITE_VIEWS[site].includes(viewRaw as ReportView) ? (viewRaw as ReportView) : 'summary'
   const today = getShift(new Date()).date
 
   let to = DATE_RE.test(get('to') ?? '') ? (get('to') as string) : today
@@ -122,6 +123,7 @@ function journalRow(
     counterpartId?: number | null
     tonnage: number
     buckets?: number | null
+    bucketWeight?: number | null
     auGrade?: number | null
     loader?: string | null
     truck?: string | null
@@ -143,6 +145,7 @@ function journalRow(
     counterpart: e.counterpartId ? (names.get(e.counterpartId) ?? '—') : null,
     tonnage: e.tonnage,
     buckets: e.buckets ?? null,
+    bucketWeight: e.bucketWeight ?? null,
     auGrade: e.auGrade ?? null,
     loader: e.loader ?? null,
     truck: e.truck ?? null,
@@ -249,6 +252,7 @@ async function getPerevalJournal(ids: number[], names: Map<number, string>, star
         stockpileId: r.stockpileId,
         tonnage: -r.buckets * Number(r.weight),
         buckets: r.buckets,
+        bucketWeight: Number(r.weight),
         auGrade: Number(r.au),
         loader: r.loader,
         note: r.note,
@@ -515,6 +519,17 @@ export type BuiltReport = {
   summary: ReportSection
   journal: ReportSection
   shifts: ReportSection
+  buckets: ReportSection
+}
+
+function getBucketRows(journal: JournalRow[]): Row[] {
+  return journal
+    .filter((e) => e.type === 'feed')
+    .map((e) => {
+      const tonnage = -e.tonnage
+      const au = (e.auGrade as number | null) ?? 0
+      return { ...e, tonnage, metal: tonnage * au }
+    })
 }
 
 export async function buildReport(f: ReportFilters): Promise<BuiltReport> {
@@ -525,7 +540,8 @@ export async function buildReport(f: ReportFilters): Promise<BuiltReport> {
   const { start, end } = periodBounds(f.from, f.to)
 
   const empty: ReportSection = { rows: [], totals: {} }
-  if (ids.length === 0) return { filters: f, piles, selectedPiles, summary: empty, journal: empty, shifts: empty }
+  if (ids.length === 0)
+    return { filters: f, piles, selectedPiles, summary: empty, journal: empty, shifts: empty, buckets: empty }
 
   const [summaryRows, journalAll] = await Promise.all([
     getSummaryRows(f.site, selectedPiles, start, end),
@@ -547,5 +563,6 @@ export async function buildReport(f: ReportFilters): Promise<BuiltReport> {
     summary: section('summary', summaryRows),
     journal: section('journal', journalRows),
     shifts: section('shifts', shiftRows),
+    buckets: f.site === 'pereval' ? section('buckets', getBucketRows(journalAll)) : empty,
   }
 }

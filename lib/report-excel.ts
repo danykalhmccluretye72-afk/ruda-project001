@@ -4,6 +4,7 @@ import {
   JOURNAL_TYPES,
   SCOPE_LABELS,
   SITE_LABELS,
+  SITE_VIEWS,
   VIEW_LABELS,
   reportColumns,
   type ColumnKind,
@@ -102,7 +103,7 @@ export async function buildReportWorkbook(report: BuiltReport) {
   params.addRow([])
   for (const [k, v] of rows) params.addRow([k, v]).getCell(1).font = { bold: true }
 
-  const order: ReportView[] = [f.view, ...(['summary', 'journal', 'shifts'] as ReportView[]).filter((v) => v !== f.view)]
+  const order: ReportView[] = [f.view, ...SITE_VIEWS[f.site].filter((v) => v !== f.view)]
   for (const view of order) addSheet(wb, report, view)
 
   return wb.xlsx.writeBuffer()

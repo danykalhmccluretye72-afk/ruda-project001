@@ -1,5 +1,5 @@
 export type ReportSite = 'pereval' | 'kirankan'
-export type ReportView = 'summary' | 'journal' | 'shifts'
+export type ReportView = 'summary' | 'journal' | 'shifts' | 'buckets'
 export type ReportScope = 'all' | 'active' | 'archived' | 'historical'
 export type SortDir = 'asc' | 'desc'
 
@@ -25,12 +25,19 @@ export const VIEW_LABELS: Record<ReportView, string> = {
   summary: 'Сводка по штабелям',
   journal: 'Журнал операций',
   shifts: 'По сменам',
+  buckets: 'Подача ковшами',
 }
 
 export const VIEW_DESCRIPTIONS: Record<ReportView, string> = {
   summary: 'Остаток на начало и конец периода, движение и маркшейдерские корректировки по каждому штабелю.',
   journal: 'Каждая операция за период: поступления, подача, дробление, корректировки.',
   shifts: 'Итоги движения по каждой смене периода.',
+  buckets: 'История подачи в переработку: каждая запись ковшей погрузчика со штабелем, весом ковша и содержанием.',
+}
+
+export const SITE_VIEWS: Record<ReportSite, ReportView[]> = {
+  pereval: ['summary', 'journal', 'shifts', 'buckets'],
+  kirankan: ['summary', 'journal', 'shifts'],
 }
 
 export const SCOPE_LABELS: Record<ReportScope, string> = {
@@ -62,6 +69,20 @@ export const JOURNAL_TYPES: Record<ReportSite, { value: string; label: string }[
 }
 
 export function reportColumns(site: ReportSite, view: ReportView): ReportColumn[] {
+  if (view === 'buckets') {
+    return [
+      { key: 'at', label: 'Дата и время', kind: 'datetime', width: 17 },
+      { key: 'shiftLabel', label: 'Смена', kind: 'text', width: 16 },
+      { key: 'stockpile', label: 'Штабель', kind: 'text', width: 20 },
+      { key: 'loader', label: 'Погрузчик', kind: 'text', width: 16 },
+      { key: 'buckets', label: 'Ковшей', kind: 'buckets', total: true },
+      { key: 'bucketWeight', label: 'Вес ковша, т', kind: 'tons' },
+      { key: 'tonnage', label: 'Масса, т', kind: 'tons', total: true },
+      { key: 'auGrade', label: 'Au, г/т', kind: 'grade' },
+      { key: 'metal', label: 'Металл, г', kind: 'metal', total: true },
+      { key: 'note', label: 'Примечание', kind: 'text', width: 30 },
+    ]
+  }
   if (view === 'summary') {
     return site === 'pereval'
       ? [
@@ -146,6 +167,7 @@ export const DEFAULT_SORT: Record<ReportView, { sort: string; dir: SortDir }> = 
   summary: { sort: 'name', dir: 'asc' },
   journal: { sort: 'at', dir: 'desc' },
   shifts: { sort: 'shiftDate', dir: 'desc' },
+  buckets: { sort: 'at', dir: 'desc' },
 }
 
 export function reportQuery(f: ReportFilters, patch: Partial<ReportFilters> = {}) {

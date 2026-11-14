@@ -459,13 +459,14 @@ export async function getCurrentShiftBalances(key: ShiftKey): Promise<StockpileB
   const openingById = new Map(opening.map((b) => [b.id, b]))
   return now.map((b) => {
     const o = openingById.get(b.id)
-    // Маркшейдерские корректировки не смешиваются с поступлением и подачей; `adjusted` — накопленная сумма.
+    // Маркшейдерские корректировки не смешиваются с поступлением и подачей; `adjusted` — за выбранную смену.
     return {
       ...b,
       received: b.received - (o?.received ?? 0),
       fed: b.fed - (o?.fed ?? 0),
       crushedIn: b.crushedIn - (o?.crushedIn ?? 0),
       crushedOut: b.crushedOut - (o?.crushedOut ?? 0),
+      adjusted: b.adjusted - (o?.adjusted ?? 0),
     }
   })
 }
