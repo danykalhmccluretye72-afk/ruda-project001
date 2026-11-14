@@ -1,113 +1,105 @@
 import { Download } from 'lucide-react'
+import Link from 'next/link'
 import { PageHeader } from '@/components/page-header'
-import { ShiftPicker } from '@/components/shift-picker'
+import { ReportFilters } from '@/components/report-filters'
+import { ReportTable } from '@/components/report-table'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { getShiftBalanceReport } from '@/lib/queries'
+import { DEFAULT_SORT, SCOPE_LABELS, SITE_LABELS, VIEW_DESCRIPTIONS, VIEW_LABELS, reportQuery, type ReportView } from '@/lib/report-columns'
+import { buildReport, getReportPiles, parseReportFilters } from '@/lib/reports'
 import { requireOperatorPage } from '@/lib/session'
-import { formatShift, getShift, parseShiftKey } from '@/lib/shift'
-import { formatGrade, formatMetal, formatTons } from '@/lib/utils'
+import { formatShiftDate, getShift } from '@/lib/shift'
+import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
-export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ date?: string; shift?: string }> }) {
-  await requireOperatorPage()
-  const params = await searchParams
-  const current = getShift(new Date())
-  const selected = parseShiftKey(params.date, params.shift) ?? current
-  const rows = (await getShiftBalanceReport(selected)).filter(
-    (r) => r.isActive || r.opening !== 0 || r.closing !== 0,
-  )
+const UI_LIMIT = 1000
+const VIEWS: ReportView[] = ['summary', 'journal', 'shifts']
 
-  const total = rows.reduce(
-    (acc, r) => ({
-      opening: acc.opening + r.opening,
-      received: acc.received + r.received,
-      crushedIn: acc.crushedIn + r.crushedIn,
-      crushedOut: acc.crushedOut + r.crushedOut,
-      fed: acc.fed + r.fed,
-      closing: acc.closing + r.closing,
-      metal: acc.metal + r.closing * r.auGrade,
-    }),
-    { opening: 0, received: 0, crushedIn: 0, crushedOut: 0, fed: 0, closing: 0, metal: 0 },
-  )
-  const csvHref = `/api/reports/balance?date=${selected.date}&shift=${selected.shift}`
-  const dash = (v: number) => (Math.abs(v) < 0.005 ? '—' : formatTons(v))
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  await requireOperatorPage()
+  const filters = parseReportFilters(await searchParams)
+  const today = getShift(new Date()).date
+  const [report, perevalPiles, kirankanPiles] = await Promise.all([
+    buildReport(filters),
+    getReportPiles('pereval'),
+    getReportPiles('kirankan'),
+  ])
+  const section = report[filters.view]
+  const pileName = filters.pile ? report.piles.find((p) => p.id === filters.pile)?.name : null
+  const exportHref = `/api/reports/export?${reportQuery(filters)}`
 
   return (
     <>
-      <PageHeader title="Отчёты" description="Остаток по штабелям на конец любой смены с движением за смену." />
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <ShiftPicker path="/reports" value={selected} current={current} />
+      <PageHeader
+        title="Отчёты"
+        description="Выборки по активным, архивным и историческим штабелям за любой период с сортировкой и выгрузкой в Excel."
+      />
+
+      <Card className="mb-6">
+        <CardContent className="pt-6">
+          <ReportFilters filters={filters} piles={{ pereval: perevalPiles, kirankan: kirankanPiles }} today={today} />
+        </CardContent>
+      </Card>
+
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <nav aria-label="Вид отчёта" className="flex flex-wrap gap-1 rounded-lg border bg-muted/40 p-1">
+          {VIEWS.map((v) => (
+            <Link
+              key={v}
+              href={`/reports?${reportQuery(filters, { view: v, ...DEFAULT_SORT[v] })}`}
+              aria-current={filters.view === v ? 'page' : undefined}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground',
+                filters.view === v && 'bg-background text-foreground shadow-sm',
+              )}
+            >
+              {VIEW_LABELS[v]}
+            </Link>
+          ))}
+        </nav>
         <Button asChild>
-          <a href={csvHref} download>
+          <a href={exportHref} download>
             <Download className="size-4" aria-hidden="true" />
-            Выгрузить в Excel (CSV)
+            Выгрузить в Excel (.xlsx)
           </a>
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Остатки на конец смены</CardTitle>
-          <CardDescription>{formatShift(selected)}</CardDescription>
+          <CardTitle>
+            {VIEW_LABELS[filters.view]} — {SITE_LABELS[filters.site]}
+          </CardTitle>
+          <CardDescription className="text-pretty">
+            {formatShiftDate(filters.from)} — {formatShiftDate(filters.to)} · {SCOPE_LABELS[filters.scope]}
+            {pileName ? ` · ${pileName}` : ''} · {section.rows.length} строк. {VIEW_DESCRIPTIONS[filters.view]}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {rows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Штабелей нет.</p>
+          {section.rows.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              {report.selectedPiles.length === 0 ? 'Под выбранные условия не попал ни один штабель.' : 'За выбранный период данных нет.'}
+            </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Штабель</TableHead>
-                  <TableHead className="text-right">На начало, т</TableHead>
-                  <TableHead className="text-right">Поступление</TableHead>
-                  <TableHead className="text-right">Дробл. приход</TableHead>
-                  <TableHead className="text-right">Дробл. расход</TableHead>
-                  <TableHead className="text-right">Подача</TableHead>
-                  <TableHead className="text-right">На конец, т</TableHead>
-                  <TableHead className="text-right">Au, г/т</TableHead>
-                  <TableHead className="text-right">Металл, г</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="font-medium">
-                      {r.name}
-                      {!r.isActive ? <span className="ml-2 text-xs text-muted-foreground">архив</span> : null}
-                    </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums text-muted-foreground">
-                      {formatTons(r.opening)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">{dash(r.received)}</TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">{dash(r.crushedIn)}</TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">{dash(r.crushedOut)}</TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">{dash(r.fed)}</TableCell>
-                    <TableCell className="text-right font-mono font-semibold tabular-nums">{formatTons(r.closing)}</TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">{formatGrade(r.auGrade)}</TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">{formatMetal(r.closing * r.auGrade)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-              <TableFooter>
-                <TableRow>
-                  <TableCell className="font-semibold">Итого</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{formatTons(total.opening)}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{dash(total.received)}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{dash(total.crushedIn)}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{dash(total.crushedOut)}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{dash(total.fed)}</TableCell>
-                  <TableCell className="text-right font-mono font-semibold tabular-nums">{formatTons(total.closing)}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">
-                    {formatGrade(total.closing > 0 ? total.metal / total.closing : 0)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{formatMetal(total.metal)}</TableCell>
-                </TableRow>
-              </TableFooter>
-            </Table>
+            <>
+              <ReportTable filters={filters} section={section} limit={UI_LIMIT} />
+              {section.rows.length > UI_LIMIT ? (
+                <p className="mt-4 text-sm text-muted-foreground">
+                  Показаны первые {UI_LIMIT} из {section.rows.length} строк. Полная выборка — в выгрузке Excel.
+                </p>
+              ) : null}
+            </>
           )}
+          <p className="mt-4 text-xs text-muted-foreground">
+            Период: с 19:00 дня перед {formatShiftDate(filters.from)} (начало смены 1) до 19:00 {formatShiftDate(filters.to)}{' '}
+            (конец смены 2), время Хабаровска. Маркшейдерский замер показан отдельно и не входит в поступление и подачу. В
+            Excel-файле — все три вида отчёта отдельными листами с фильтрами и итогами.
+          </p>
         </CardContent>
       </Card>
     </>

@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { StockpileBalance } from '@/lib/queries'
-import { cn, formatGrade, formatMetal, formatTons } from '@/lib/utils'
+import { cn, formatGrade, formatTons } from '@/lib/utils'
 
 function signed(value: number) {
   if (value > 0) return `+${formatTons(value)}`
@@ -20,8 +20,9 @@ function sumBalances(rows: StockpileBalance[]) {
       balance: acc.balance + b.balance,
       positive: acc.positive + Math.max(0, b.balance),
       metal: acc.metal + Math.max(0, b.balance) * b.auGrade,
+      adjusted: acc.adjusted + b.adjusted,
     }),
-    { received: 0, crushed: 0, fed: 0, balance: 0, positive: 0, metal: 0 },
+    { received: 0, crushed: 0, fed: 0, balance: 0, positive: 0, metal: 0, adjusted: 0 },
   )
 }
 
@@ -32,10 +33,10 @@ function TotalsCells({ totals }: { totals: ReturnType<typeof sumBalances> }) {
       <TableCell className="text-right font-mono tabular-nums">
         {formatGrade(totals.positive > 0 ? totals.metal / totals.positive : 0)}
       </TableCell>
-      <TableCell className="text-right font-mono tabular-nums">{formatMetal(totals.metal)}</TableCell>
       <TableCell className="text-right font-mono tabular-nums">{signed(totals.received)}</TableCell>
       <TableCell className="text-right font-mono tabular-nums">{signed(totals.crushed)}</TableCell>
       <TableCell className="text-right font-mono tabular-nums">{signed(-totals.fed)}</TableCell>
+      <TableCell className="text-right font-mono tabular-nums">{signed(totals.adjusted)}</TableCell>
       <TableCell className="hidden lg:table-cell" />
     </>
   )
@@ -53,7 +54,9 @@ export function BalanceTable({ balances, canEdit }: { balances: StockpileBalance
     <Card>
       <CardHeader>
         <CardTitle>Остатки по штабелям Перевальное</CardTitle>
-        <CardDescription>Текущий остаток и движение за текущую смену, тонны</CardDescription>
+        <CardDescription>
+          Текущий остаток и движение за текущую смену, тонны. Маркшейдерский замер — накопленная корректировка, на подачу не влияет.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {balances.length === 0 ? (
@@ -76,10 +79,14 @@ export function BalanceTable({ balances, canEdit }: { balances: StockpileBalance
                 <TableHead>Штабель</TableHead>
                 <TableHead className="text-right">Остаток</TableHead>
                 <TableHead className="text-right">Au, г/т</TableHead>
-                <TableHead className="text-right">Металл, г</TableHead>
                 <TableHead className="text-right">Поступление</TableHead>
                 <TableHead className="text-right">Дробление</TableHead>
                 <TableHead className="text-right">Подача</TableHead>
+                <TableHead className="text-right">
+                  <abbr title="Маркшейдерский замер: накопленная корректировка массы, не входит в поступление и подачу" className="no-underline">
+                    Маркш. замер
+                  </abbr>
+                </TableHead>
                 <TableHead className="hidden w-40 lg:table-cell">
                   <span className="sr-only">Заполненность</span>
                 </TableHead>
@@ -108,9 +115,6 @@ export function BalanceTable({ balances, canEdit }: { balances: StockpileBalance
                       {formatTons(b.balance)}
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">{formatGrade(b.auGrade)}</TableCell>
-                    <TableCell className="text-right font-mono tabular-nums text-muted-foreground">
-                      {formatMetal(Math.max(0, b.balance) * b.auGrade)}
-                    </TableCell>
                     <TableCell
                       className={cn('text-right font-mono tabular-nums', b.received > 0 ? 'text-success' : 'text-muted-foreground')}
                     >
@@ -128,6 +132,14 @@ export function BalanceTable({ balances, canEdit }: { balances: StockpileBalance
                       className={cn('text-right font-mono tabular-nums', b.fed > 0 ? 'text-destructive' : 'text-muted-foreground')}
                     >
                       {signed(-b.fed)}
+                    </TableCell>
+                    <TableCell
+                      className={cn(
+                        'text-right font-mono tabular-nums',
+                        b.adjusted > 0 ? 'text-success' : b.adjusted < 0 ? 'text-destructive' : 'text-muted-foreground',
+                      )}
+                    >
+                      {signed(b.adjusted)}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
                       <div className="h-2 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">

@@ -52,11 +52,11 @@ export async function GET(request: Request) {
 
   lines.push('', cell('Движение остатков за сутки — Перевальное'))
   lines.push(
-    ['Штабель', 'Au, г/т', 'На начало, т', 'Поступление, т', 'Дробление приход, т', 'Дробление расход, т', 'Подача, т', 'На конец, т', 'Металл на конец, г']
+    ['Штабель', 'Au, г/т', 'На начало, т', 'Поступление, т', 'Дробление приход, т', 'Дробление расход, т', 'Подача, т', 'Маркш. замер, т', 'На конец, т', 'Металл на конец, г']
       .map(cell)
       .join(';'),
   )
-  const t = { opening: 0, received: 0, crushedIn: 0, crushedOut: 0, fed: 0, closing: 0, metal: 0 }
+  const t = { opening: 0, received: 0, crushedIn: 0, crushedOut: 0, fed: 0, adjusted: 0, closing: 0, metal: 0 }
   for (const r of report.balanceRows) {
     const metal = r.closing * r.auGrade
     t.opening += r.opening
@@ -64,10 +64,11 @@ export async function GET(request: Request) {
     t.crushedIn += r.crushedIn
     t.crushedOut += r.crushedOut
     t.fed += r.fed
+    t.adjusted += r.adjusted
     t.closing += r.closing
     t.metal += metal
     lines.push(
-      [cell(r.name), num(r.auGrade, 3), num(r.opening), num(r.received), num(r.crushedIn), num(r.crushedOut), num(r.fed), num(r.closing), num(metal, 1)].join(';'),
+      [cell(r.name), num(r.auGrade, 3), num(r.opening), num(r.received), num(r.crushedIn), num(r.crushedOut), num(r.fed), num(r.adjusted), num(r.closing), num(metal, 1)].join(';'),
     )
   }
   lines.push(
@@ -79,6 +80,7 @@ export async function GET(request: Request) {
       num(t.crushedIn),
       num(t.crushedOut),
       num(t.fed),
+      num(t.adjusted),
       num(t.closing),
       num(t.metal, 1),
     ].join(';'),

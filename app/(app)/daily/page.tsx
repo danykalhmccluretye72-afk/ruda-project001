@@ -62,10 +62,11 @@ export default async function DailyReportPage({
       crushedIn: acc.crushedIn + r.crushedIn,
       crushedOut: acc.crushedOut + r.crushedOut,
       fed: acc.fed + r.fed,
+      adjusted: acc.adjusted + r.adjusted,
       closing: acc.closing + r.closing,
       metal: acc.metal + r.closing * r.auGrade,
     }),
-    { opening: 0, received: 0, crushedIn: 0, crushedOut: 0, fed: 0, closing: 0, metal: 0 },
+    { opening: 0, received: 0, crushedIn: 0, crushedOut: 0, fed: 0, adjusted: 0, closing: 0, metal: 0 },
   )
 
   const summary: { label: string; hint: string; t: FeedTotals }[] = [
@@ -199,6 +200,7 @@ export default async function DailyReportPage({
                   <TableHead className="text-right">Дробл. приход</TableHead>
                   <TableHead className="text-right">Дробл. расход</TableHead>
                   <TableHead className="text-right">Подача</TableHead>
+                  <TableHead className="text-right">Маркш. замер</TableHead>
                   <TableHead className="text-right">На конец, т</TableHead>
                   <TableHead className="text-right">Au, г/т</TableHead>
                   <TableHead className="text-right">Металл, г</TableHead>
@@ -224,6 +226,9 @@ export default async function DailyReportPage({
                     <TableCell className={num}>
                       <Flow value={-r.fed} />
                     </TableCell>
+                    <TableCell className={num}>
+                      <Flow value={r.adjusted} />
+                    </TableCell>
                     <TableCell className={cn(num, 'font-semibold')}>{formatTons(r.closing)}</TableCell>
                     <TableCell className={num}>{formatGrade(r.auGrade)}</TableCell>
                     <TableCell className={num}>{formatMetal(r.closing * r.auGrade)}</TableCell>
@@ -245,6 +250,9 @@ export default async function DailyReportPage({
                   </TableCell>
                   <TableCell className={num}>
                     <Flow value={-bal.fed} />
+                  </TableCell>
+                  <TableCell className={num}>
+                    <Flow value={bal.adjusted} />
                   </TableCell>
                   <TableCell className={cn(num, 'font-semibold')}>{formatTons(bal.closing)}</TableCell>
                   <TableCell className={num}>{formatGrade(bal.closing > 0 ? bal.metal / bal.closing : 0)}</TableCell>

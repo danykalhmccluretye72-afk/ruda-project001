@@ -164,6 +164,8 @@ export type ShiftBalanceRow = {
   crushedIn: number
   crushedOut: number
   fed: number
+  /** Маркшейдерская корректировка за период — отдельно, не входит в поступление и подачу */
+  adjusted: number
   closing: number
 }
 
@@ -180,23 +182,24 @@ export async function getDailyBalanceReport(date: string): Promise<ShiftBalanceR
   return getPeriodBalanceReport(start, end)
 }
 
-async function getPeriodBalanceReport(start: Date, end: Date): Promise<ShiftBalanceRow[]> {
+/** Остатки на начало/конец произвольного периода [start, end) с движением за период. */
+export async function getPeriodBalanceReport(start: Date, end: Date): Promise<ShiftBalanceRow[]> {
   const all = { includeHistorical: true }
   const [opening, closing] = await Promise.all([getBalances(start, all), getBalances(end, all)])
   const openMap = new Map(opening.map((b) => [b.id, b]))
   const rows = closing.map((c) => {
     const o = openMap.get(c.id)
-    const adj = c.adjusted - (o?.adjusted ?? 0)
     return {
       id: c.id,
       name: c.name,
       isActive: c.isActive,
       auGrade: c.auGrade,
       opening: o?.balance ?? c.initialTonnage,
-      received: c.received - (o?.received ?? 0) + Math.max(adj, 0),
+      received: c.received - (o?.received ?? 0),
       crushedIn: c.crushedIn - (o?.crushedIn ?? 0),
       crushedOut: c.crushedOut - (o?.crushedOut ?? 0),
-      fed: c.fed - (o?.fed ?? 0) + Math.max(-adj, 0),
+      fed: c.fed - (o?.fed ?? 0),
+      adjusted: c.adjusted - (o?.adjusted ?? 0),
       closing: c.balance,
       isHistorical: c.isHistorical,
     }
@@ -207,7 +210,7 @@ async function getPeriodBalanceReport(start: Date, end: Date): Promise<ShiftBala
     .filter(
       (r) =>
         !r.isHistorical ||
-        [r.opening, r.received, r.crushedIn, r.crushedOut, r.fed, r.closing].some((v) => Math.abs(v) > eps),
+        [r.opening, r.received, r.crushedIn, r.crushedOut, r.fed, r.adjusted, r.closing].some((v) => Math.abs(v) > eps),
     )
     .map(({ isHistorical: _h, ...r }) => r)
 }
@@ -456,15 +459,13 @@ export async function getCurrentShiftBalances(key: ShiftKey): Promise<StockpileB
   const openingById = new Map(opening.map((b) => [b.id, b]))
   return now.map((b) => {
     const o = openingById.get(b.id)
-    const adj = b.adjusted - (o?.adjusted ?? 0)
-    // Маркшейдерские корректировки в движении: «+» — поступление, «−» — списание.
+    // Маркшейдерские корректировки не смешиваются с поступлением и подачей; `adjusted` — накопленная сумма.
     return {
       ...b,
-      received: b.received - (o?.received ?? 0) + Math.max(adj, 0),
-      fed: b.fed - (o?.fed ?? 0) + Math.max(-adj, 0),
+      received: b.received - (o?.received ?? 0),
+      fed: b.fed - (o?.fed ?? 0),
       crushedIn: b.crushedIn - (o?.crushedIn ?? 0),
       crushedOut: b.crushedOut - (o?.crushedOut ?? 0),
-      adjusted: adj,
     }
   })
 }
@@ -488,7 +489,7 @@ export async function getKirankanStockpiles({ historical = false } = {}): Promis
   return rows.map((r) => ({ id: r.id, name: r.name, auGrade: Number(r.auGrade) }))
 }
 
-async function kirankanTotals(from?: Date, to?: Date) {
+export async function kirankanTotals(from?: Date, to?: Date) {
   const range = (
     col:
       | typeof kirankanReceipts.occurredAt
