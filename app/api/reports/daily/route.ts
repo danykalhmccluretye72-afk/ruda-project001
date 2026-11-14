@@ -1,4 +1,5 @@
 import { buildDailyReport, percent, type FeedTotals } from '@/lib/daily-report'
+import { canViewSurvey, normalizeRole } from '@/lib/roles'
 import { getSession } from '@/lib/session'
 import { formatShiftDate, parseShiftKey } from '@/lib/shift'
 
@@ -85,6 +86,17 @@ export async function GET(request: Request) {
       num(t.metal, 1),
     ].join(';'),
   )
+
+  if (!canViewSurvey(normalizeRole(session.user.role))) {
+    const surveyCol = 7
+    const start = lines.indexOf(cell('Движение остатков за сутки — Перевальное')) + 1
+    for (let i = start; i < lines.length; i++) {
+      lines[i] = lines[i]
+        .split(';')
+        .filter((_, idx) => idx !== surveyCol)
+        .join(';')
+    }
+  }
 
   // BOM + ';' so Excel with Russian locale opens the file correctly.
   return new Response('\uFEFF' + lines.join('\r\n'), {

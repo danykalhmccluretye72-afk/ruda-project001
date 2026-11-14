@@ -31,6 +31,11 @@ export function canUseLoaderConsole(role: Role) {
   return role === 'loader' || role === 'user' || role === 'admin'
 }
 
+/** Маркшейдерские корректировки масс — скрыты от роли «Инфо». */
+export function canViewSurvey(role: Role) {
+  return role !== 'info'
+}
+
 export function normalizeRole(value: unknown): Role {
   return value === 'admin' || value === 'info' || value === 'kirankan' || value === 'loader' ? value : 'user'
 }

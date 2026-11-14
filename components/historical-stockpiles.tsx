@@ -68,10 +68,10 @@ export function HistoricalStockpiles({ stockpiles, canEdit }: { stockpiles: Stoc
                   <TableCell className="font-medium">{s.name}</TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{formatTons(s.initialTonnage)}</TableCell>
                   <TableCell className="text-right font-mono tabular-nums">
-                    {formatTons(s.received + s.crushedIn + Math.max(s.adjusted, 0))}
+                    {formatTons(s.received + s.crushedIn)}
                   </TableCell>
                   <TableCell className="text-right font-mono tabular-nums">
-                    {formatTons(s.fed + s.crushedOut + Math.max(-s.adjusted, 0))}
+                    {formatTons(s.fed + s.crushedOut)}
                   </TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{formatTons(s.balance)}</TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{formatGrade(s.auGrade)}</TableCell>

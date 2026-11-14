@@ -14,7 +14,15 @@ function tone(value: number) {
   return value > 0 ? 'text-success' : value < 0 ? 'text-destructive' : 'text-muted-foreground'
 }
 
-export function KirankanBalanceTable({ balances, canManage }: { balances: KirankanBalance[]; canManage: boolean }) {
+export function KirankanBalanceTable({
+  balances,
+  canManage,
+  showSurvey,
+}: {
+  balances: KirankanBalance[]
+  canManage: boolean
+  showSurvey: boolean
+}) {
   const max = Math.max(1, ...balances.map((b) => b.balance))
   const totals = balances.reduce(
     (acc, b) => ({
@@ -57,7 +65,7 @@ export function KirankanBalanceTable({ balances, canManage }: { balances: Kirank
                 <TableHead className="text-right">Au, г/т</TableHead>
                 <TableHead className="text-right">Металл, г</TableHead>
                 <TableHead className="text-right">Поступление</TableHead>
-                <TableHead className="text-right">Корректировка</TableHead>
+                {showSurvey ? <TableHead className="text-right">Корректировка</TableHead> : null}
                 <TableHead className="text-right">Отгрузка на Перевальное</TableHead>
                 <TableHead className="hidden w-40 lg:table-cell">
                   <span className="sr-only">Заполненность</span>
@@ -80,9 +88,11 @@ export function KirankanBalanceTable({ balances, canManage }: { balances: Kirank
                   <TableCell className={cn('text-right font-mono tabular-nums', tone(b.received))}>
                     {signed(b.received)}
                   </TableCell>
-                  <TableCell className={cn('text-right font-mono tabular-nums', tone(b.adjusted))}>
-                    {signed(b.adjusted)}
-                  </TableCell>
+                  {showSurvey ? (
+                    <TableCell className={cn('text-right font-mono tabular-nums', tone(b.adjusted))}>
+                      {signed(b.adjusted)}
+                    </TableCell>
+                  ) : null}
                   <TableCell className={cn('text-right font-mono tabular-nums', tone(-b.shipped))}>
                     {signed(-b.shipped)}
                   </TableCell>
@@ -108,7 +118,9 @@ export function KirankanBalanceTable({ balances, canManage }: { balances: Kirank
                 </TableCell>
                 <TableCell className="text-right font-mono tabular-nums">{formatMetal(totals.metal)}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums">{signed(totals.received)}</TableCell>
-                <TableCell className="text-right font-mono tabular-nums">{signed(totals.adjusted)}</TableCell>
+                {showSurvey ? (
+                  <TableCell className="text-right font-mono tabular-nums">{signed(totals.adjusted)}</TableCell>
+                ) : null}
                 <TableCell className="text-right font-mono tabular-nums">{signed(-totals.shipped)}</TableCell>
                 <TableCell className="hidden lg:table-cell" />
               </TableRow>

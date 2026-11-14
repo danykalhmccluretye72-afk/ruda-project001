@@ -26,7 +26,7 @@ function sumBalances(rows: StockpileBalance[]) {
   )
 }
 
-function TotalsCells({ totals }: { totals: ReturnType<typeof sumBalances> }) {
+function TotalsCells({ totals, showSurvey }: { totals: ReturnType<typeof sumBalances>; showSurvey: boolean }) {
   return (
     <>
       <TableCell className="text-right font-mono font-semibold tabular-nums">{formatTons(totals.balance)}</TableCell>
@@ -36,13 +36,21 @@ function TotalsCells({ totals }: { totals: ReturnType<typeof sumBalances> }) {
       <TableCell className="text-right font-mono tabular-nums">{signed(totals.received)}</TableCell>
       <TableCell className="text-right font-mono tabular-nums">{signed(totals.crushed)}</TableCell>
       <TableCell className="text-right font-mono tabular-nums">{signed(-totals.fed)}</TableCell>
-      <TableCell className="text-right font-mono tabular-nums">{signed(totals.adjusted)}</TableCell>
+      {showSurvey ? <TableCell className="text-right font-mono tabular-nums">{signed(totals.adjusted)}</TableCell> : null}
       <TableCell className="hidden lg:table-cell" />
     </>
   )
 }
 
-export function BalanceTable({ balances, canEdit }: { balances: StockpileBalance[]; canEdit: boolean }) {
+export function BalanceTable({
+  balances,
+  canEdit,
+  showSurvey,
+}: {
+  balances: StockpileBalance[]
+  canEdit: boolean
+  showSurvey: boolean
+}) {
   const max = Math.max(1, ...balances.map((b) => b.balance))
   const totals = sumBalances(balances)
   const groups = [
@@ -55,7 +63,8 @@ export function BalanceTable({ balances, canEdit }: { balances: StockpileBalance
       <CardHeader>
         <CardTitle>Остатки по штабелям Перевальное</CardTitle>
         <CardDescription>
-          Текущий остаток и движение за текущую смену, тонны. Маркшейдерский замер — накопленная корректировка, на подачу не влияет.
+          Текущий остаток и движение за текущую смену, тонны.
+          {showSurvey ? ' Маркшейдерский замер — накопленная корректировка, на подачу не влияет.' : null}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -82,11 +91,16 @@ export function BalanceTable({ balances, canEdit }: { balances: StockpileBalance
                 <TableHead className="text-right">Поступление</TableHead>
                 <TableHead className="text-right">Дробление</TableHead>
                 <TableHead className="text-right">Подача</TableHead>
-                <TableHead className="text-right">
-                  <abbr title="Маркшейдерский замер: накопленная корректировка массы, не входит в поступление и подачу" className="no-underline">
-                    Маркш. замер
-                  </abbr>
-                </TableHead>
+                {showSurvey ? (
+                  <TableHead className="text-right">
+                    <abbr
+                      title="Маркшейдерский замер: накопленная корректировка массы, не входит в поступление и подачу"
+                      className="no-underline"
+                    >
+                      Маркш. замер
+                    </abbr>
+                  </TableHead>
+                ) : null}
                 <TableHead className="hidden w-40 lg:table-cell">
                   <span className="sr-only">Заполненность</span>
                 </TableHead>
@@ -95,7 +109,7 @@ export function BalanceTable({ balances, canEdit }: { balances: StockpileBalance
             {groups.map((group) => (
             <TableBody key={group.key} className="[&_tr:last-child]:border-b">
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableCell colSpan={8} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TableCell colSpan={showSurvey ? 8 : 7} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {group.title}
                 </TableCell>
               </TableRow>
@@ -133,14 +147,16 @@ export function BalanceTable({ balances, canEdit }: { balances: StockpileBalance
                     >
                       {signed(-b.fed)}
                     </TableCell>
-                    <TableCell
-                      className={cn(
-                        'text-right font-mono tabular-nums',
-                        b.adjusted > 0 ? 'text-success' : b.adjusted < 0 ? 'text-destructive' : 'text-muted-foreground',
-                      )}
-                    >
-                      {signed(b.adjusted)}
-                    </TableCell>
+                    {showSurvey ? (
+                      <TableCell
+                        className={cn(
+                          'text-right font-mono tabular-nums',
+                          b.adjusted > 0 ? 'text-success' : b.adjusted < 0 ? 'text-destructive' : 'text-muted-foreground',
+                        )}
+                      >
+                        {signed(b.adjusted)}
+                      </TableCell>
+                    ) : null}
                     <TableCell className="hidden lg:table-cell">
                       <div className="h-2 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
                         <div
@@ -156,14 +172,14 @@ export function BalanceTable({ balances, canEdit }: { balances: StockpileBalance
                 <TableCell className="font-semibold">
                   Итого {group.key === 'active' ? 'по активным' : 'по архивным'}
                 </TableCell>
-                <TotalsCells totals={sumBalances(group.rows)} />
+                <TotalsCells totals={sumBalances(group.rows)} showSurvey={showSurvey} />
               </TableRow>
             </TableBody>
             ))}
             <TableFooter>
               <TableRow>
                 <TableCell className="font-semibold">Итого общее</TableCell>
-                <TotalsCells totals={totals} />
+                <TotalsCells totals={totals} showSurvey={showSurvey} />
               </TableRow>
             </TableFooter>
           </Table>

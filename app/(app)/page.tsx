@@ -13,7 +13,7 @@ import {
   getShiftFeedReport,
   getShiftPlan,
 } from '@/lib/queries'
-import { canEdit, canManageKirankan } from '@/lib/roles'
+import { canEdit, canManageKirankan, canViewSurvey } from '@/lib/roles'
 import { requireViewerPage } from '@/lib/session'
 import { getShift, nextShift, parseShiftKey, prevShift } from '@/lib/shift'
 
@@ -61,8 +61,12 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
           { key: next, kind: 'next', plan: nextPlan, report: null },
         ]}
       />
-      <BalanceTable balances={balances} canEdit={isNow && canEdit(user.role)} />
-      <KirankanBalanceTable balances={kirankan} canManage={isNow && canManageKirankan(user.role)} />
+      <BalanceTable balances={balances} canEdit={isNow && canEdit(user.role)} showSurvey={canViewSurvey(user.role)} />
+      <KirankanBalanceTable
+        balances={kirankan}
+        canManage={isNow && canManageKirankan(user.role)}
+        showSurvey={canViewSurvey(user.role)}
+      />
     </>
   )
 }

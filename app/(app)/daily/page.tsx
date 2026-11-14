@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { buildDailyReport, percent, type FeedTotals } from '@/lib/daily-report'
+import { canViewSurvey } from '@/lib/roles'
 import { requireViewerPage } from '@/lib/session'
 import { formatShiftDate, getShift, parseShiftKey, shiftHours } from '@/lib/shift'
 import { cn, formatGrade, formatMetal, formatPercent, formatTons } from '@/lib/utils'
@@ -46,7 +47,8 @@ export default async function DailyReportPage({
 }: {
   searchParams: Promise<{ date?: string; archive?: string }>
 }) {
-  await requireViewerPage()
+  const user = await requireViewerPage()
+  const showSurvey = canViewSurvey(user.role)
   const params = await searchParams
   const today = getShift(new Date()).date
   const date = parseShiftKey(params.date, '1')?.date ?? today
@@ -200,7 +202,7 @@ export default async function DailyReportPage({
                   <TableHead className="text-right">Дробл. приход</TableHead>
                   <TableHead className="text-right">Дробл. расход</TableHead>
                   <TableHead className="text-right">Подача</TableHead>
-                  <TableHead className="text-right">Маркш. замер</TableHead>
+                  {showSurvey ? <TableHead className="text-right">Маркш. замер</TableHead> : null}
                   <TableHead className="text-right">На конец, т</TableHead>
                   <TableHead className="text-right">Au, г/т</TableHead>
                   <TableHead className="text-right">Металл, г</TableHead>
@@ -226,9 +228,11 @@ export default async function DailyReportPage({
                     <TableCell className={num}>
                       <Flow value={-r.fed} />
                     </TableCell>
-                    <TableCell className={num}>
-                      <Flow value={r.adjusted} />
-                    </TableCell>
+                    {showSurvey ? (
+                      <TableCell className={num}>
+                        <Flow value={r.adjusted} />
+                      </TableCell>
+                    ) : null}
                     <TableCell className={cn(num, 'font-semibold')}>{formatTons(r.closing)}</TableCell>
                     <TableCell className={num}>{formatGrade(r.auGrade)}</TableCell>
                     <TableCell className={num}>{formatMetal(r.closing * r.auGrade)}</TableCell>
@@ -251,9 +255,11 @@ export default async function DailyReportPage({
                   <TableCell className={num}>
                     <Flow value={-bal.fed} />
                   </TableCell>
-                  <TableCell className={num}>
-                    <Flow value={bal.adjusted} />
-                  </TableCell>
+                  {showSurvey ? (
+                    <TableCell className={num}>
+                      <Flow value={bal.adjusted} />
+                    </TableCell>
+                  ) : null}
                   <TableCell className={cn(num, 'font-semibold')}>{formatTons(bal.closing)}</TableCell>
                   <TableCell className={num}>{formatGrade(bal.closing > 0 ? bal.metal / bal.closing : 0)}</TableCell>
                   <TableCell className={num}>{formatMetal(bal.metal)}</TableCell>
