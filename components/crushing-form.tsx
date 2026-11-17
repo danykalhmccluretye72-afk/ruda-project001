@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useActionToast, withIsoDate } from '@/hooks/use-action-toast'
+import { bucketWeightFor, describeLoaderBucket } from '@/lib/bucket'
 import type { Loader, Stockpile } from '@/lib/queries'
 import { formatShift, fromKhvInputValue, getShift, toKhvInputValue } from '@/lib/shift'
 import { formatGrade, formatTons } from '@/lib/utils'
@@ -36,13 +37,17 @@ export function CrushingForm({ stockpiles, loaders }: { stockpiles: Stockpile[];
   useActionToast(state, reset)
 
   const loader = loaders.find((l) => String(l.id) === loaderId)
-  const bucketWeight = loader?.bucketWeightT ?? 0
+  const pileOf = (id: string) => stockpiles.find((s) => String(s.id) === id)
+  const weightOf = (id: string) => (loader ? bucketWeightFor(loader, pileOf(id)?.bulkDensity) : null)
+  const missingDensity = lines
+    .filter((l) => l.sourceId && weightOf(l.sourceId) == null)
+    .map((l) => pileOf(l.sourceId)?.name ?? '')
   const totals = lines.reduce(
     (acc, l) => {
       const count = Number(l.buckets)
-      if (!Number.isInteger(count) || count <= 0) return acc
-      const tonnage = count * bucketWeight
-      const grade = stockpiles.find((s) => String(s.id) === l.sourceId)?.auGrade ?? 0
+      if (!Number.isFinite(count) || count <= 0) return acc
+      const tonnage = count * (weightOf(l.sourceId) ?? 0)
+      const grade = pileOf(l.sourceId)?.auGrade ?? 0
       return { buckets: acc.buckets + count, tonnage: acc.tonnage + tonnage, metal: acc.metal + tonnage * grade }
     },
     { buckets: 0, tonnage: 0, metal: 0 },
@@ -91,7 +96,7 @@ export function CrushingForm({ stockpiles, loaders }: { stockpiles: Stockpile[];
               <SelectContent>
                 {loaders.map((l) => (
                   <SelectItem key={l.id} value={String(l.id)}>
-                    {l.name} · {formatTons(l.bucketWeightT)} т/ковш
+                    {l.name} · {describeLoaderBucket(l, formatTons)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -169,6 +174,11 @@ export function CrushingForm({ stockpiles, loaders }: { stockpiles: Stockpile[];
               <Plus className="size-4" aria-hidden="true" />
               Добавить штабель
             </Button>
+            {missingDensity.length > 0 ? (
+              <p className="text-xs text-destructive" role="alert">
+                Не задан насыпной вес: {missingDensity.join(', ')}. Укажите его в «Настройках».
+              </p>
+            ) : null}
           </fieldset>
 
           <div className="flex flex-col gap-2">
@@ -223,7 +233,7 @@ export function CrushingForm({ stockpiles, loaders }: { stockpiles: Stockpile[];
             ) : null}
           </div>
 
-          <Button type="submit" disabled={pending || !targetId}>
+          <Button type="submit" disabled={pending || !targetId || missingDensity.length > 0}>
             {pending ? 'Сохранение…' : 'Записать дробление'}
           </Button>
         </form>

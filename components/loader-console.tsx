@@ -13,6 +13,7 @@ export type ConsolePile = {
   id: number
   name: string
   auGrade: number
+  bucketWeightT: number
   plannedT: number
   fedT: number
   planned: number
@@ -21,7 +22,7 @@ export type ConsolePile = {
 
 type Props = {
   shiftLabel: string
-  loaders: { id: number; name: string; bucketWeightT: number }[]
+  loaders: { id: number; name: string; bucketLabel: string }[]
   loaderId: number
   piles: ConsolePile[]
   currentId: number | null
@@ -74,7 +75,7 @@ export function LoaderConsole({ shiftLabel, loaders, loaderId, piles, currentId,
           >
             {loaders.map((l) => (
               <option key={l.id} value={l.id}>
-                {l.name} · ковш {formatTons(l.bucketWeightT)} т
+                {l.name} · {l.bucketLabel}
               </option>
             ))}
           </select>
@@ -115,7 +116,8 @@ export function LoaderConsole({ shiftLabel, loaders, loaderId, piles, currentId,
                 <p className="text-xs uppercase tracking-wide text-primary">Сейчас грузить</p>
                 <p className="mt-1 text-balance text-3xl font-bold leading-tight">{current.name}</p>
                 <p className="mt-1 font-mono text-sm text-muted-foreground">
-                  ковш {current.done + 1} из {current.planned} · Au {current.auGrade.toFixed(2)} г/т
+                  ковш {current.done + 1} из {current.planned} · {formatTons(current.bucketWeightT)} т · Au{' '}
+                  {current.auGrade.toFixed(2)} г/т
                 </p>
               </div>
               <Button

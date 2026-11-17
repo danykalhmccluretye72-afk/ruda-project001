@@ -18,12 +18,14 @@ import {
   stockpiles,
 } from './db/schema'
 import { shiftBounds, type ShiftKey, type ShiftNo } from './shift'
+import type { LoaderBucket } from './bucket'
 
 export type Stockpile = {
   id: number
   name: string
   initialTonnage: number
   auGrade: number
+  bulkDensity: number | null
   isActive: boolean
   isHistorical: boolean
 }
@@ -47,12 +49,24 @@ export async function getStockpiles(
     name: r.name,
     initialTonnage: Number(r.initialTonnage),
     auGrade: Number(r.auGrade),
+    bulkDensity: r.bulkDensity == null ? null : Number(r.bulkDensity),
     isActive: r.isActive,
     isHistorical: r.isHistorical,
   }))
 }
 
-export type Loader = { id: number; name: string; bucketWeightT: number; isActive: boolean }
+export type Loader = LoaderBucket & { id: number; name: string; isActive: boolean }
+
+export function toLoader(r: typeof loaders.$inferSelect): Loader {
+  return {
+    id: r.id,
+    name: r.name,
+    bucketMode: r.bucketMode === 'volume' ? 'volume' : 'weight',
+    bucketWeightT: Number(r.bucketWeightT),
+    bucketVolumeM3: r.bucketVolumeM3 == null ? null : Number(r.bucketVolumeM3),
+    isActive: r.isActive,
+  }
+}
 
 export async function getLoaders(options: { activeOnly?: boolean } = {}): Promise<Loader[]> {
   const rows = await db
@@ -60,7 +74,7 @@ export async function getLoaders(options: { activeOnly?: boolean } = {}): Promis
     .from(loaders)
     .where(options.activeOnly ? eq(loaders.isActive, true) : undefined)
     .orderBy(asc(loaders.name))
-  return rows.map((r) => ({ id: r.id, name: r.name, bucketWeightT: Number(r.bucketWeightT), isActive: r.isActive }))
+  return rows.map(toLoader)
 }
 
 export type StockpileBalance = Stockpile & {
@@ -73,7 +87,8 @@ export type StockpileBalance = Stockpile & {
   balance: number
 }
 
-const crushLineTonnage = sql<string>`coalesce(sum(${crushingLines.bucketCount} * ${crushingOps.bucketWeightT}), 0)`
+export const crushLineWeight = sql`coalesce(${crushingLines.bucketWeightT}, ${crushingOps.bucketWeightT})`
+const crushLineTonnage = sql<string>`coalesce(sum(${crushingLines.bucketCount} * ${crushLineWeight}), 0)`
 
 /** Остатки по штабелям. `until` — учитывать только движения строго раньше этого момента. */
 export async function getBalances(
@@ -229,6 +244,7 @@ export async function getRecentCrushing(limit = 50) {
       opId: crushingLines.opId,
       sourceName: stockpiles.name,
       bucketCount: crushingLines.bucketCount,
+      bucketWeightT: crushingLines.bucketWeightT,
       auGrade: crushingLines.auGrade,
     })
     .from(crushingLines)
@@ -243,7 +259,8 @@ export async function getRecentCrushing(limit = 50) {
       .map((l) => ({
         name: l.sourceName ?? '—',
         buckets: l.bucketCount,
-        tonnage: l.bucketCount * bucketWeightT,
+        bucketWeightT: l.bucketWeightT == null ? bucketWeightT : Number(l.bucketWeightT),
+        tonnage: l.bucketCount * (l.bucketWeightT == null ? bucketWeightT : Number(l.bucketWeightT)),
         auGrade: Number(l.auGrade),
       }))
     const tonnage = sources.reduce((s, l) => s + l.tonnage, 0)
@@ -769,7 +786,14 @@ export async function getStockpileAdjustments(limit = 50): Promise<StockpileAdju
   return rows.map((r) => ({ ...r, stockpileName: r.stockpileName ?? '—', deltaT: Number(r.deltaT) }))
 }
 
-export type LoaderShiftPlanRow = { stockpileId: number; name: string; auGrade: number; plannedT: number; fedT: number }
+export type LoaderShiftPlanRow = {
+  stockpileId: number
+  name: string
+  auGrade: number
+  bulkDensity: number | null
+  plannedT: number
+  fedT: number
+}
 export type LoaderShiftFeed = {
   id: number
   stockpileId: number
@@ -789,6 +813,7 @@ export async function getLoaderShiftState(key: ShiftKey): Promise<{ rows: Loader
         plannedT: shiftPlans.plannedT,
         name: stockpiles.name,
         auGrade: stockpiles.auGrade,
+        bulkDensity: stockpiles.bulkDensity,
       })
       .from(shiftPlans)
       .innerJoin(stockpiles, eq(stockpiles.id, shiftPlans.stockpileId))
@@ -822,6 +847,7 @@ export async function getLoaderShiftState(key: ShiftKey): Promise<{ rows: Loader
       stockpileId: p.stockpileId,
       name: p.name,
       auGrade: Number(p.auGrade),
+      bulkDensity: p.bulkDensity == null ? null : Number(p.bulkDensity),
       plannedT: Number(p.plannedT),
       fedT: fed.get(p.stockpileId) ?? 0,
     }))

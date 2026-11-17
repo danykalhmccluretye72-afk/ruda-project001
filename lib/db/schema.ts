@@ -11,6 +11,8 @@ export const stockpiles = pgTable('stockpiles', {
   name: text('name').notNull().unique(),
   initialTonnage: numeric('initial_tonnage', { precision: 14, scale: 3 }).notNull().default('0'),
   auGrade: numeric('au_grade', { precision: 10, scale: 3 }).notNull().default('0'),
+  /** Насыпной вес, т/м³ — для погрузчиков с настройкой по объёму ковша */
+  bulkDensity: numeric('bulk_density', { precision: 10, scale: 3 }),
   isActive: boolean('is_active').notNull().default(true),
   isHistorical: boolean('is_historical').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -19,7 +21,10 @@ export const stockpiles = pgTable('stockpiles', {
 export const loaders = pgTable('loaders', {
   id: serial('id').primaryKey(),
   name: text('name').notNull().unique(),
+  /** 'weight' — задан вес ковша; 'volume' — объём ковша, вес = объём × насыпной вес штабеля */
+  bucketMode: text('bucket_mode').notNull().default('weight'),
   bucketWeightT: numeric('bucket_weight_t', { precision: 10, scale: 3 }).notNull(),
+  bucketVolumeM3: numeric('bucket_volume_m3', { precision: 10, scale: 3 }),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
@@ -68,6 +73,8 @@ export const crushingLines = pgTable('crushing_lines', {
   opId: integer('op_id').notNull(),
   sourceStockpileId: integer('source_stockpile_id').notNull(),
   bucketCount: numeric('bucket_count', { precision: 10, scale: 1, mode: 'number' }).notNull(),
+  /** Вес ковша для этого исходного штабеля; null в старых записях — берётся из операции */
+  bucketWeightT: numeric('bucket_weight_t', { precision: 10, scale: 3 }),
   auGrade: numeric('au_grade', { precision: 10, scale: 3 }).notNull().default('0'),
 })
 

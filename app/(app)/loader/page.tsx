@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { LoaderConsole, type ConsolePile } from '@/components/loader-console'
+import { bucketWeightFor, describeLoaderBucket } from '@/lib/bucket'
 import { upcoming } from '@/lib/bucket-sequence'
+import { formatTons } from '@/lib/utils'
 import { getLoaderShiftState, getLoaders } from '@/lib/queries'
 import { requireLoaderPage } from '@/lib/session'
 import { formatShift, getShift } from '@/lib/shift'
@@ -19,24 +21,27 @@ export default async function LoaderPage({ searchParams }: { searchParams: Promi
   }
 
   const machine = machines.find((m) => String(m.id) === loaderParam) ?? machines[0]
-  const w = machine.bucketWeightT
-
-  const piles: ConsolePile[] = state.rows.map((r) => ({
-    id: r.stockpileId,
-    name: r.name,
-    auGrade: r.auGrade,
-    plannedT: r.plannedT,
-    fedT: r.fedT,
-    planned: Math.max(1, Math.round(r.plannedT / w)),
-    done: Math.round(r.fedT / w),
-  }))
+  const piles: ConsolePile[] = state.rows.map((r) => {
+    // Без насыпного веса ковш по объёму не пересчитать — ориентируемся на номинальный вес погрузчика.
+    const w = bucketWeightFor(machine, r.bulkDensity) ?? machine.bucketWeightT
+    return {
+      id: r.stockpileId,
+      name: r.name,
+      auGrade: r.auGrade,
+      bucketWeightT: w,
+      plannedT: r.plannedT,
+      fedT: r.fedT,
+      planned: Math.max(1, Math.round(r.plannedT / w)),
+      done: Math.round(r.fedT / w),
+    }
+  })
   const queue = upcoming(piles, 2)
   const last = state.recent[0]
 
   return (
     <LoaderConsole
       shiftLabel={formatShift(shift)}
-      loaders={machines.map((m) => ({ id: m.id, name: m.name, bucketWeightT: m.bucketWeightT }))}
+      loaders={machines.map((m) => ({ id: m.id, name: m.name, bucketLabel: describeLoaderBucket(m, formatTons) }))}
       loaderId={machine.id}
       piles={piles}
       currentId={queue[0] ?? null}

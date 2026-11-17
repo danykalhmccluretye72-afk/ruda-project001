@@ -26,7 +26,8 @@ import {
   type ShiftNo,
 } from '@/lib/shift'
 import { assertOperator } from '@/lib/session'
-import { getBalances } from '@/lib/queries'
+import { getBalances, toLoader } from '@/lib/queries'
+import { bucketWeightFor } from '@/lib/bucket'
 import { formatTons } from '@/lib/utils'
 
 export type ActionState = { ok: boolean; message: string } | null
@@ -71,10 +72,18 @@ function fail(error: z.ZodError): ActionState {
 
 async function getActiveStockpile(id: number) {
   const [pile] = await db
-    .select({ id: stockpiles.id, auGrade: stockpiles.auGrade })
+    .select({ id: stockpiles.id, name: stockpiles.name, auGrade: stockpiles.auGrade, bulkDensity: stockpiles.bulkDensity })
     .from(stockpiles)
     .where(and(eq(stockpiles.id, id), eq(stockpiles.isActive, true)))
   return pile ?? null
+}
+
+function densityOf(v: string | null) {
+  return v == null ? null : Number(v)
+}
+
+function noDensityMessage(pileName: string, loaderName: string) {
+  return `У штабеля «${pileName}» не задан насыпной вес, а погрузчик «${loaderName}» настроен по объёму ковша. Укажите насыпной вес в «Настройках».`
 }
 
 /* ---------- Поступление ---------- */
@@ -142,7 +151,8 @@ export async function addFeed(_prev: ActionState, formData: FormData): Promise<A
     .where(and(eq(loaders.id, data.loaderId), eq(loaders.isActive, true)))
   if (!loader) return { ok: false, message: 'Погрузчик не найден' }
 
-  const bucketWeight = Number(loader.bucketWeightT)
+  const bucketWeight = bucketWeightFor(toLoader(loader), densityOf(pile.bulkDensity))
+  if (bucketWeight == null) return { ok: false, message: noDensityMessage(pile.name, loader.name) }
   const shift = getShift(data.occurredAt)
   await db.insert(oreFeeds).values({
     stockpileId: data.stockpileId,
@@ -150,7 +160,7 @@ export async function addFeed(_prev: ActionState, formData: FormData): Promise<A
     loader: loader.name,
     occurredAt: data.occurredAt,
     bucketCount: data.bucketCount,
-    bucketWeightT: loader.bucketWeightT,
+    bucketWeightT: bucketWeight.toFixed(3),
     auGrade: pile.auGrade,
     shiftDate: shift.date,
     shiftNo: shift.shift,
@@ -172,18 +182,55 @@ export async function deleteFeed(formData: FormData) {
 
 /* ---------- Погрузчики ---------- */
 
-const loaderSchema = z.object({
-  name: z.string().trim().min(1, 'Укажите название погрузчика').max(100),
-  bucketWeightT: positiveNumber('Вес ковша').refine((v) => v <= 100, 'Вес ковша: не более 100 т'),
-})
+const decimalInput = (v: unknown) => (typeof v === 'string' ? v.trim().replace(',', '.') : v)
+
+const loaderSchema = z.discriminatedUnion('bucketMode', [
+  z.object({
+    bucketMode: z.literal('weight'),
+    name: z.string().trim().min(1, 'Укажите название погрузчика').max(100),
+    bucketWeightT: z.preprocess(
+      decimalInput,
+      positiveNumber('Вес ковша').refine((v) => v <= 100, 'Вес ковша: не более 100 т'),
+    ),
+  }),
+  z.object({
+    bucketMode: z.literal('volume'),
+    name: z.string().trim().min(1, 'Укажите название погрузчика').max(100),
+    bucketVolumeM3: z.preprocess(
+      decimalInput,
+      positiveNumber('Объём ковша').refine((v) => v <= 100, 'Объём ковша: не более 100 м³'),
+    ),
+  }),
+])
+
+function loaderValues(data: z.infer<typeof loaderSchema>, previousWeight?: string) {
+  return data.bucketMode === 'weight'
+    ? { name: data.name, bucketMode: 'weight', bucketWeightT: data.bucketWeightT.toFixed(3) }
+    : {
+        name: data.name,
+        bucketMode: 'volume',
+        bucketVolumeM3: data.bucketVolumeM3.toFixed(3),
+        // Вес ковша сохраняется на случай обратного переключения на настройку по весу.
+        bucketWeightT: previousWeight ?? '0',
+      }
+}
+
+function parseLoaderForm(formData: FormData) {
+  return loaderSchema.safeParse({
+    bucketMode: formData.get('bucketMode') === 'volume' ? 'volume' : 'weight',
+    name: formData.get('name') ?? '',
+    bucketWeightT: formData.get('bucketWeightT') ?? undefined,
+    bucketVolumeM3: formData.get('bucketVolumeM3') ?? undefined,
+  })
+}
 
 export async function addLoader(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await assertOperator()
-  const parsed = loaderSchema.safeParse(Object.fromEntries(formData))
+  const parsed = parseLoaderForm(formData)
   if (!parsed.success) return fail(parsed.error)
   const inserted = await db
     .insert(loaders)
-    .values({ name: parsed.data.name, bucketWeightT: parsed.data.bucketWeightT.toFixed(3) })
+    .values(loaderValues(parsed.data))
     .onConflictDoNothing({ target: loaders.name })
     .returning({ id: loaders.id })
   if (inserted.length === 0) return { ok: false, message: 'Погрузчик с таким названием уже существует' }
@@ -195,18 +242,20 @@ export async function updateLoader(_prev: ActionState, formData: FormData): Prom
   await assertOperator()
   const id = z.coerce.number().int().positive().safeParse(formData.get('id'))
   if (!id.success) return { ok: false, message: 'Погрузчик не найден' }
-  const parsed = loaderSchema.safeParse(Object.fromEntries(formData))
+  const parsed = parseLoaderForm(formData)
   if (!parsed.success) return fail(parsed.error)
+  const [current] = await db.select({ w: loaders.bucketWeightT }).from(loaders).where(eq(loaders.id, id.data))
+  if (!current) return { ok: false, message: 'Погрузчик не найден' }
   try {
     await db
       .update(loaders)
-      .set({ name: parsed.data.name, bucketWeightT: parsed.data.bucketWeightT.toFixed(3) })
+      .set(loaderValues(parsed.data, current.w))
       .where(eq(loaders.id, id.data))
   } catch {
     return { ok: false, message: 'Погрузчик с таким названием уже существует' }
   }
   revalidateAll()
-  return { ok: true, message: 'Погрузчик обновлён. Новый вес ковша применяется к следующим подачам.' }
+  return { ok: true, message: 'Погрузчик обновлён. Новая настройка ковша применяется к следующим записям.' }
 }
 
 export async function toggleLoaderActive(formData: FormData) {
@@ -225,6 +274,16 @@ const stockpileSchema = z.object({
     .number({ message: 'Исходный остаток: введите число' })
     .refine((v) => Number.isFinite(v) && v >= 0, 'Исходный остаток не может быть отрицательным'),
   auGrade: gradeSchema,
+  bulkDensity: z.preprocess(
+    (v) => {
+      const s = decimalInput(v)
+      return s === '' || s == null ? null : s
+    },
+    z.coerce
+      .number({ message: 'Насыпной вес: введите число' })
+      .refine((v) => Number.isFinite(v) && v > 0 && v <= 10, 'Насыпной вес: от 0 до 10 т/м³')
+      .nullable(),
+  ),
 })
 
 export async function addStockpile(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -237,6 +296,7 @@ export async function addStockpile(_prev: ActionState, formData: FormData): Prom
       name: parsed.data.name,
       initialTonnage: parsed.data.initialTonnage.toFixed(3),
       auGrade: parsed.data.auGrade.toFixed(3),
+      bulkDensity: parsed.data.bulkDensity == null ? null : parsed.data.bulkDensity.toFixed(3),
     })
     .onConflictDoNothing({ target: stockpiles.name })
     .returning({ id: stockpiles.id })
@@ -259,6 +319,7 @@ export async function updateStockpile(_prev: ActionState, formData: FormData): P
         name: parsed.data.name,
         initialTonnage: parsed.data.initialTonnage.toFixed(3),
         auGrade: parsed.data.auGrade.toFixed(3),
+        bulkDensity: parsed.data.bulkDensity == null ? null : parsed.data.bulkDensity.toFixed(3),
       })
       .where(eq(stockpiles.id, id.data))
   } catch {
@@ -496,17 +557,26 @@ export async function addCrushing(_prev: ActionState, formData: FormData): Promi
 
   const ids = [data.targetStockpileId, ...lines.map((l) => l.sourceId)]
   const piles = await db
-    .select({ id: stockpiles.id, auGrade: stockpiles.auGrade })
+    .select({ id: stockpiles.id, name: stockpiles.name, auGrade: stockpiles.auGrade, bulkDensity: stockpiles.bulkDensity })
     .from(stockpiles)
     .where(and(inArray(stockpiles.id, ids), eq(stockpiles.isActive, true)))
-  const gradeById = new Map(piles.map((p) => [p.id, p.auGrade]))
-  if (ids.some((id) => !gradeById.has(id))) return { ok: false, message: 'Штабель не найден или в архиве' }
+  const pileById = new Map(piles.map((p) => [p.id, p]))
+  if (ids.some((id) => !pileById.has(id))) return { ok: false, message: 'Штабель не найден или в архиве' }
 
-  const [loader] = await db
+  const [loaderRow] = await db
     .select()
     .from(loaders)
     .where(and(eq(loaders.id, data.loaderId), eq(loaders.isActive, true)))
-  if (!loader) return { ok: false, message: 'Погрузчик не найден' }
+  if (!loaderRow) return { ok: false, message: 'Погрузчик не найден' }
+  const loader = toLoader(loaderRow)
+
+  const weighted: { sourceId: number; buckets: number; weight: number }[] = []
+  for (const l of lines) {
+    const pile = pileById.get(l.sourceId)!
+    const weight = bucketWeightFor(loader, densityOf(pile.bulkDensity))
+    if (weight == null) return { ok: false, message: noDensityMessage(pile.name, loader.name) }
+    weighted.push({ ...l, weight })
+  }
 
   const shift = getShift(data.occurredAt)
   await db.transaction(async (tx) => {
@@ -519,22 +589,23 @@ export async function addCrushing(_prev: ActionState, formData: FormData): Promi
         targetStockpileId: data.targetStockpileId,
         loaderId: loader.id,
         loader: loader.name,
-        bucketWeightT: loader.bucketWeightT,
+        bucketWeightT: weighted[0].weight.toFixed(3),
         note: data.note,
       })
       .returning({ id: crushingOps.id })
     await tx.insert(crushingLines).values(
-      lines.map((l) => ({
+      weighted.map((l) => ({
         opId: op.id,
         sourceStockpileId: l.sourceId,
         bucketCount: l.buckets,
-        auGrade: gradeById.get(l.sourceId) ?? '0',
+        bucketWeightT: l.weight.toFixed(3),
+        auGrade: pileById.get(l.sourceId)?.auGrade ?? '0',
       })),
     )
   })
   revalidateAll()
-  const buckets = lines.reduce((s, l) => s + l.buckets, 0)
-  const tonnage = buckets * Number(loader.bucketWeightT)
+  const buckets = weighted.reduce((s, l) => s + l.buckets, 0)
+  const tonnage = weighted.reduce((s, l) => s + l.buckets * l.weight, 0)
   return { ok: true, message: `Дробление ${buckets} ковш. = ${formatTons(tonnage)} т записано в смену ${shift.shift}` }
 }
 

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useActionToast, withIsoDate } from '@/hooks/use-action-toast'
+import { bucketWeightFor, describeLoaderBucket } from '@/lib/bucket'
 import type { Loader, Stockpile } from '@/lib/queries'
 import { formatShift, fromKhvInputValue, getShift, toKhvInputValue } from '@/lib/shift'
 import { formatGrade, formatMetal, formatTons } from '@/lib/utils'
@@ -34,7 +35,9 @@ export function FeedForm({ stockpiles, loaders }: { stockpiles: Stockpile[]; loa
   const pile = stockpiles.find((s) => String(s.id) === stockpileId)
   const loader = loaders.find((l) => String(l.id) === loaderId)
   const count = Number(buckets)
-  const bucketWeight = loader?.bucketWeightT ?? 0
+  const resolvedWeight = loader ? bucketWeightFor(loader, pile?.bulkDensity) : null
+  const missingDensity = loader?.bucketMode === 'volume' && resolvedWeight == null
+  const bucketWeight = resolvedWeight ?? 0
   const tonnage = Number.isInteger(count) && count > 0 ? count * bucketWeight : 0
   const grade = pile?.auGrade ?? 0
   const parsedTime = now ? fromKhvInputValue(now) : null
@@ -76,7 +79,7 @@ export function FeedForm({ stockpiles, loaders }: { stockpiles: Stockpile[]; loa
               <SelectContent>
                 {loaders.map((l) => (
                   <SelectItem key={l.id} value={String(l.id)}>
-                    {l.name} · {formatTons(l.bucketWeightT)} т
+                    {l.name} · {describeLoaderBucket(l, formatTons)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -133,8 +136,15 @@ export function FeedForm({ stockpiles, loaders }: { stockpiles: Stockpile[]; loa
           <dl className="flex flex-col gap-1 rounded-md border border-border bg-muted/50 p-3 text-sm">
             <div className="flex items-center justify-between">
               <dt className="text-muted-foreground">Вес ковша</dt>
-              <dd className="font-mono tabular-nums">{formatTons(bucketWeight)} т</dd>
+              <dd className="font-mono tabular-nums">{missingDensity ? '—' : `${formatTons(bucketWeight)} т`}</dd>
             </div>
+            {loader?.bucketMode === 'volume' ? (
+              <p className="text-xs text-muted-foreground">
+                {missingDensity
+                  ? 'У штабеля не задан насыпной вес — укажите его в «Настройках».'
+                  : `${formatTons(loader.bucketVolumeM3 ?? 0)} м³ × ${formatGrade(pile?.bulkDensity ?? 0)} т/м³`}
+              </p>
+            ) : null}
             <div className="flex items-center justify-between">
               <dt className="text-muted-foreground">Содержание Au</dt>
               <dd className="font-mono tabular-nums">{formatGrade(grade)} г/т</dd>
@@ -155,7 +165,7 @@ export function FeedForm({ stockpiles, loaders }: { stockpiles: Stockpile[]; loa
             <Label htmlFor="feed-note">Примечание</Label>
             <Input id="feed-note" name="note" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" disabled={pending || missingDensity}>
             {pending ? 'Сохранение…' : 'Записать подачу'}
           </Button>
         </form>

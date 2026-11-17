@@ -7,6 +7,8 @@ import { db } from '@/lib/db'
 import { loaders, oreFeeds, stockpiles } from '@/lib/db/schema'
 import { assertLoaderOperator } from '@/lib/session'
 import { getShift } from '@/lib/shift'
+import { bucketWeightFor } from '@/lib/bucket'
+import { toLoader } from '@/lib/queries'
 
 export type LoaderActionState = { ok: boolean; message: string }
 
@@ -21,7 +23,7 @@ export async function recordBucket(stockpileId: number, loaderId: number): Promi
 
   const [[pile], [loader]] = await Promise.all([
     db
-      .select({ id: stockpiles.id, name: stockpiles.name, auGrade: stockpiles.auGrade })
+      .select({ id: stockpiles.id, name: stockpiles.name, auGrade: stockpiles.auGrade, bulkDensity: stockpiles.bulkDensity })
       .from(stockpiles)
       .where(and(eq(stockpiles.id, pileId.data), eq(stockpiles.isActive, true), eq(stockpiles.isHistorical, false))),
     db
@@ -32,6 +34,11 @@ export async function recordBucket(stockpileId: number, loaderId: number): Promi
   if (!pile) return { ok: false, message: 'Штабель не найден' }
   if (!loader) return { ok: false, message: 'Погрузчик не найден' }
 
+  const weight = bucketWeightFor(toLoader(loader), pile.bulkDensity == null ? null : Number(pile.bulkDensity))
+  if (weight == null) {
+    return { ok: false, message: `У штабеля «${pile.name}» не задан насыпной вес. Обратитесь к оператору.` }
+  }
+
   const now = new Date()
   const shift = getShift(now)
   await db.insert(oreFeeds).values({
@@ -40,7 +47,7 @@ export async function recordBucket(stockpileId: number, loaderId: number): Promi
     loader: loader.name,
     occurredAt: now,
     bucketCount: 1,
-    bucketWeightT: loader.bucketWeightT,
+    bucketWeightT: weight.toFixed(3),
     auGrade: pile.auGrade,
     shiftDate: shift.date,
     shiftNo: shift.shift,

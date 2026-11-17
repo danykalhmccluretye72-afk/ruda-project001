@@ -19,11 +19,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useActionToast } from '@/hooks/use-action-toast'
+import type { BucketMode } from '@/lib/bucket'
 import type { Loader } from '@/lib/queries'
-import { formatTons } from '@/lib/utils'
+import { cn, formatTons } from '@/lib/utils'
 
 function LoaderDialog({ loader }: { loader?: Loader }) {
   const [open, setOpen] = useState(false)
+  const [mode, setMode] = useState<BucketMode>(loader?.bucketMode ?? 'weight')
   const [state, formAction, pending] = useActionState<ActionState, FormData>(loader ? updateLoader : addLoader, null)
   const close = useCallback(() => setOpen(false), [])
   useActionToast(state, close)
@@ -46,7 +48,7 @@ function LoaderDialog({ loader }: { loader?: Loader }) {
         <DialogHeader>
           <DialogTitle>{loader ? 'Изменить погрузчик' : 'Новый погрузчик'}</DialogTitle>
           <DialogDescription>
-            Вес ковша фиксируется в каждой записи подачи — изменение не пересчитывает прошлые данные.
+            Вес ковша фиксируется в каждой записи подачи и дробления — изменение не пересчитывает прошлые данные.
           </DialogDescription>
         </DialogHeader>
         <form action={formAction} className="flex flex-col gap-4">
@@ -55,21 +57,72 @@ function LoaderDialog({ loader }: { loader?: Loader }) {
             <Label htmlFor="loader-name">Название / гаражный №</Label>
             <Input id="loader-name" name="name" required maxLength={100} defaultValue={loader?.name} placeholder="CAT 988H №12" />
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="loader-weight">Вес ковша, т</Label>
-            <Input
-              id="loader-weight"
-              name="bucketWeightT"
-              type="number"
-              inputMode="decimal"
-              step="0.001"
-              min="0.001"
-              max="100"
-              required
-              className="font-mono"
-              defaultValue={loader?.bucketWeightT}
-            />
-          </div>
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-2 text-sm font-medium">Настройка ковша</legend>
+            <div role="radiogroup" className="grid grid-cols-2 gap-1 rounded-md border border-border bg-muted p-1">
+              {(
+                [
+                  ['weight', 'По весу, т'],
+                  ['volume', 'По объёму, м³'],
+                ] as const
+              ).map(([value, label]) => (
+                <label
+                  key={value}
+                  className={cn(
+                    'flex cursor-pointer items-center justify-center rounded px-3 py-1.5 text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring',
+                    mode === value ? 'bg-background font-medium text-foreground shadow-sm' : 'text-muted-foreground',
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="bucketMode"
+                    value={value}
+                    checked={mode === value}
+                    onChange={() => setMode(value)}
+                    className="sr-only"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          {mode === 'weight' ? (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="loader-weight">Вес ковша, т</Label>
+              <Input
+                id="loader-weight"
+                name="bucketWeightT"
+                type="number"
+                inputMode="decimal"
+                step="0.001"
+                min="0.001"
+                max="100"
+                required
+                className="font-mono"
+                defaultValue={loader?.bucketWeightT}
+              />
+              <p className="text-xs text-muted-foreground">Одинаковый вес ковша для всех штабелей.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="loader-volume">Объём ковша, м³</Label>
+              <Input
+                id="loader-volume"
+                name="bucketVolumeM3"
+                type="number"
+                inputMode="decimal"
+                step="0.001"
+                min="0.001"
+                max="100"
+                required
+                className="font-mono"
+                defaultValue={loader?.bucketVolumeM3 ?? undefined}
+              />
+              <p className="text-xs text-muted-foreground">
+                Вес ковша = объём × насыпной вес штабеля. Насыпной вес задаётся в настройках каждого штабеля.
+              </p>
+            </div>
+          )}
           <DialogFooter>
             <Button type="submit" disabled={pending}>
               {pending ? 'Сохранение…' : 'Сохранить'}
@@ -121,7 +174,7 @@ export function LoaderSettings({ loaders }: { loaders: Loader[] }) {
             <TableHeader>
               <TableRow>
                 <TableHead>Погрузчик</TableHead>
-                <TableHead className="text-right">Ковш, т</TableHead>
+                <TableHead className="text-right">Ковш</TableHead>
                 <TableHead className="w-20">
                   <span className="sr-only">Действия</span>
                 </TableHead>
@@ -136,7 +189,11 @@ export function LoaderSettings({ loaders }: { loaders: Loader[] }) {
                       {!l.isActive ? <Badge variant="outline">в архиве</Badge> : null}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{formatTons(l.bucketWeightT)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">
+                    {l.bucketMode === 'volume'
+                      ? `${formatTons(l.bucketVolumeM3 ?? 0)} м³`
+                      : `${formatTons(l.bucketWeightT)} т`}
+                  </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
                       <LoaderDialog loader={l} />

@@ -99,6 +99,24 @@ function StockpileDialog({ stockpile }: { stockpile?: Stockpile }) {
               Содержание фиксируется в записи подачи на момент её ввода.
             </p>
           </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="pile-density">Насыпной вес, т/м³</Label>
+            <Input
+              id="pile-density"
+              name="bulkDensity"
+              type="number"
+              inputMode="decimal"
+              step="0.001"
+              min="0.001"
+              max="10"
+              className="font-mono"
+              placeholder="не задан"
+              defaultValue={stockpile?.bulkDensity ?? undefined}
+            />
+            <p className="text-xs text-muted-foreground">
+              Нужен для погрузчиков с ковшом по объёму: вес ковша = объём × насыпной вес.
+            </p>
+          </div>
           <DialogFooter>
             <Button type="submit" disabled={pending}>
               {pending ? 'Сохранение…' : 'Сохранить'}

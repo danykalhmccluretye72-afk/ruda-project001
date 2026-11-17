@@ -197,7 +197,7 @@ async function getPerevalJournal(ids: number[], names: Map<number, string>, star
         sourceId: crushingLines.sourceStockpileId,
         targetId: crushingOps.targetStockpileId,
         buckets: crushingLines.bucketCount,
-        weight: crushingOps.bucketWeightT,
+        weight: sql<string>`coalesce(${crushingLines.bucketWeightT}, ${crushingOps.bucketWeightT})`,
         au: crushingLines.auGrade,
         loader: sql<string | null>`coalesce(${loaders.name}, ${crushingOps.loader})`,
         note: crushingOps.note,
