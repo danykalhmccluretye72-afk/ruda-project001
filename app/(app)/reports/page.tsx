@@ -29,7 +29,12 @@ export default async function ReportsPage({
     getReportPiles('kirankan'),
   ])
   const section = report[filters.view]
-  const pileName = filters.pile ? report.piles.find((p) => p.id === filters.pile)?.name : null
+  const pileName =
+    filters.piles.length === 0
+      ? null
+      : filters.piles.length <= 3
+        ? report.selectedPiles.map((p) => p.name).join(', ')
+        : `${filters.piles.length} штабелей`
   const exportHref = `/api/reports/export?${reportQuery(filters)}`
 
   return (

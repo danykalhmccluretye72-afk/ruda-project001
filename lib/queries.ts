@@ -184,10 +184,10 @@ export async function getDailyBalanceReport(date: string): Promise<ShiftBalanceR
 
 /** Остатки на начало/конец произвольного периода [start, end) с движением за период. */
 export async function getPeriodBalanceReport(start: Date, end: Date): Promise<ShiftBalanceRow[]> {
-  const all = { includeHistorical: true }
-  const [opening, closing] = await Promise.all([getBalances(start, all), getBalances(end, all)])
+  // Исторические штабели в отчёты не попадают — они видны только во вкладке «Исторические данные».
+  const [opening, closing] = await Promise.all([getBalances(start), getBalances(end)])
   const openMap = new Map(opening.map((b) => [b.id, b]))
-  const rows = closing.map((c) => {
+  return closing.map((c) => {
     const o = openMap.get(c.id)
     return {
       id: c.id,
@@ -201,18 +201,8 @@ export async function getPeriodBalanceReport(start: Date, end: Date): Promise<Sh
       fed: c.fed - (o?.fed ?? 0),
       adjusted: c.adjusted - (o?.adjusted ?? 0),
       closing: c.balance,
-      isHistorical: c.isHistorical,
     }
   })
-  // Исторические штабели попадают в отчёт за период, только если в этом периоде по ним было движение или остаток.
-  const eps = 0.0005
-  return rows
-    .filter(
-      (r) =>
-        !r.isHistorical ||
-        [r.opening, r.received, r.crushedIn, r.crushedOut, r.fed, r.adjusted, r.closing].some((v) => Math.abs(v) > eps),
-    )
-    .map(({ isHistorical: _h, ...r }) => r)
 }
 
 export async function getRecentCrushing(limit = 50) {

@@ -64,8 +64,14 @@ export function parseReportFilters(sp: Record<string, string | string[] | undefi
 
   const scopeRaw = get('scope') as ReportScope | undefined
   const scope: ReportScope = scopeRaw && SITE_SCOPES[site].includes(scopeRaw) ? scopeRaw : 'all'
-  const pileNum = Number(get('pile'))
-  const pile = Number.isInteger(pileNum) && pileNum > 0 ? pileNum : null
+  const piles = [
+    ...new Set(
+      `${get('piles') ?? ''},${get('pile') ?? ''}`
+        .split(',')
+        .map(Number)
+        .filter((n) => Number.isInteger(n) && n > 0),
+    ),
+  ].slice(0, 500)
   const typeRaw = get('type') ?? 'all'
   const type = JOURNAL_TYPES[site].some((t) => t.value === typeRaw) ? typeRaw : 'all'
 
@@ -75,7 +81,7 @@ export function parseReportFilters(sp: Record<string, string | string[] | undefi
   const dirRaw = get('dir')
   const dir = dirRaw === 'asc' || dirRaw === 'desc' ? dirRaw : DEFAULT_SORT[view].dir
 
-  return { site, view, from, to, scope, pile, type, sort, dir }
+  return { site, view, from, to, scope, piles, type, sort, dir }
 }
 
 export function periodBounds(from: string, to: string) {
@@ -85,16 +91,21 @@ export function periodBounds(from: string, to: string) {
 /* ---------- Штабели ---------- */
 
 export async function getReportPiles(site: ReportSite): Promise<ReportPile[]> {
+  // Исторические штабели в отчёты не попадают — они есть только во вкладке «Исторические данные».
   if (site === 'kirankan') {
-    const rows = await db.select().from(kirankanStockpiles).orderBy(asc(kirankanStockpiles.name))
-    return rows.map((r) => ({ id: r.id, name: r.name, status: r.isHistorical ? 'historical' : 'active' }))
+    const rows = await db
+      .select()
+      .from(kirankanStockpiles)
+      .where(eq(kirankanStockpiles.isHistorical, false))
+      .orderBy(asc(kirankanStockpiles.name))
+    return rows.map((r) => ({ id: r.id, name: r.name, status: 'active' }))
   }
-  const rows = await db.select().from(stockpiles).orderBy(asc(stockpiles.name))
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    status: r.isHistorical ? 'historical' : r.isActive ? 'active' : 'archived',
-  }))
+  const rows = await db
+    .select()
+    .from(stockpiles)
+    .where(eq(stockpiles.isHistorical, false))
+    .orderBy(asc(stockpiles.name))
+  return rows.map((r) => ({ id: r.id, name: r.name, status: r.isActive ? 'active' : 'archived' }))
 }
 
 /* ---------- Журнал ---------- */
@@ -534,7 +545,10 @@ function getBucketRows(journal: JournalRow[]): Row[] {
 
 export async function buildReport(f: ReportFilters): Promise<BuiltReport> {
   const piles = await getReportPiles(f.site)
-  const selectedPiles = piles.filter((p) => (f.scope === 'all' || p.status === f.scope) && (!f.pile || p.id === f.pile))
+  const chosen = new Set(f.piles)
+  const selectedPiles = piles.filter(
+    (p) => (f.scope === 'all' || p.status === f.scope) && (chosen.size === 0 || chosen.has(p.id)),
+  )
   const ids = selectedPiles.map((p) => p.id)
   const names = new Map(piles.map((p) => [p.id, p.name]))
   const { start, end } = periodBounds(f.from, f.to)

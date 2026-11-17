@@ -52,8 +52,8 @@ export default async function DailyReportPage({
   const params = await searchParams
   const today = getShift(new Date()).date
   const date = parseShiftKey(params.date, '1')?.date ?? today
-  const hideArchive = params.archive === '0'
-  const query = hideArchive ? '&archive=0' : ''
+  const hideArchive = params.archive !== '1'
+  const query = hideArchive ? '' : '&archive=1'
   const report = await buildDailyReport(date, { hideArchive })
   const { s1, s2, day } = report.shifts
 

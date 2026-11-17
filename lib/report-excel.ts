@@ -85,7 +85,7 @@ export async function buildReportWorkbook(report: BuiltReport) {
     { key: 'k', width: 24 },
     { key: 'v', width: 60 },
   ]
-  const pileName = f.pile ? (report.piles.find((p) => p.id === f.pile)?.name ?? '—') : 'Все'
+  const pileName = f.piles.length === 0 ? 'Все' : report.selectedPiles.map((p) => p.name).join(', ') || '—'
   const typeName = f.type === 'all' ? 'Все' : (JOURNAL_TYPES[f.site].find((t) => t.value === f.type)?.label ?? f.type)
   const rows: [string, string][] = [
     ['Участок', SITE_LABELS[f.site]],

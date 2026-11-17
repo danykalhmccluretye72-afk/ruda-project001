@@ -43,9 +43,11 @@ export async function buildDailyReport(
     getShiftPlan(k2),
   ])
 
+  // balances уже без исторических штабелей, поэтому подача по ним тоже отсекается.
   const names = new Map(balances.map((b) => [b.id, b.name]))
+  const known = new Set(balances.map((b) => b.id))
   const archived = new Set(balances.filter((b) => !b.isActive).map((b) => b.id))
-  const visible = (id: number) => !hideArchive || !archived.has(id)
+  const visible = (id: number) => known.has(id) && (!hideArchive || !archived.has(id))
   const rows = new Map<number, { s1: FeedTotals; s2: FeedTotals }>()
   const row = (id: number) => {
     let r = rows.get(id)
@@ -58,13 +60,11 @@ export async function buildDailyReport(
     const r = row(l.stockpileId).s1
     r.factT += l.tonnage
     r.metalG += l.metalG
-    if (!names.has(l.stockpileId)) names.set(l.stockpileId, l.stockpileName)
   }
   for (const l of feed2.byStockpile) {
     const r = row(l.stockpileId).s2
     r.factT += l.tonnage
     r.metalG += l.metalG
-    if (!names.has(l.stockpileId)) names.set(l.stockpileId, l.stockpileName)
   }
 
   const feedRows: DailyFeedRow[] = [...rows.entries()]

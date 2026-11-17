@@ -9,7 +9,8 @@ export type ReportFilters = {
   from: string
   to: string
   scope: ReportScope
-  pile: number | null
+  /** Выбранные штабели; пустой список — все штабели вида */
+  piles: number[]
   type: string
   sort: string
   dir: SortDir
@@ -48,8 +49,8 @@ export const SCOPE_LABELS: Record<ReportScope, string> = {
 }
 
 export const SITE_SCOPES: Record<ReportSite, ReportScope[]> = {
-  pereval: ['all', 'active', 'archived', 'historical'],
-  kirankan: ['all', 'active', 'historical'],
+  pereval: ['all', 'active', 'archived'],
+  kirankan: ['all'],
 }
 
 export const JOURNAL_TYPES: Record<ReportSite, { value: string; label: string }[]> = {
@@ -181,7 +182,7 @@ export function reportQuery(f: ReportFilters, patch: Partial<ReportFilters> = {}
     sort: next.sort,
     dir: next.dir,
   })
-  if (next.pile) params.set('pile', String(next.pile))
+  if (next.piles.length > 0) params.set('piles', next.piles.join(','))
   if (next.type !== 'all') params.set('type', next.type)
   return params.toString()
 }

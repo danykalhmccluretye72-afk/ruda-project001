@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { PileMultiSelect } from '@/components/pile-multi-select'
 import {
   DEFAULT_SORT,
   JOURNAL_TYPES,
@@ -52,10 +53,11 @@ export function ReportFilters({
   const [from, setFrom] = useState(filters.from)
   const [to, setTo] = useState(filters.to)
   const [scope, setScope] = useState<ReportScope>(filters.scope)
-  const [pile, setPile] = useState(filters.pile ? String(filters.pile) : 'all')
+  const [pileIds, setPileIds] = useState<number[]>(filters.piles)
   const [type, setType] = useState(filters.type)
 
   const pileOptions = piles[site].filter((p) => scope === 'all' || p.status === scope)
+  const setPile = (_: 'all') => setPileIds([])
 
   function apply(patch: Partial<Filters> = {}) {
     const siteChanged = (patch.site ?? site) !== filters.site
@@ -65,7 +67,7 @@ export function ReportFilters({
       from,
       to,
       scope,
-      pile: pile === 'all' ? null : Number(pile),
+      piles: pileIds.filter((id) => pileOptions.some((p) => p.id === id)),
       type,
       ...(siteChanged ? DEFAULT_SORT[filters.view] : {}),
       ...patch,
@@ -135,20 +137,8 @@ export function ReportFilters({
           </Select>
         </div>
         <div className="flex min-w-0 flex-col gap-1.5">
-          <Label htmlFor="report-pile">Штабель</Label>
-          <Select value={pile} onValueChange={setPile}>
-            <SelectTrigger id="report-pile" className="w-full min-w-0">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Все ({pileOptions.length})</SelectItem>
-              {pileOptions.map((p) => (
-                <SelectItem key={p.id} value={String(p.id)}>
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label htmlFor="report-pile">Штабели</Label>
+          <PileMultiSelect id="report-pile" options={pileOptions} value={pileIds} onChange={setPileIds} />
         </div>
         <div className="flex min-w-0 flex-col gap-1.5">
           <Label htmlFor="report-type">Операции (журнал)</Label>

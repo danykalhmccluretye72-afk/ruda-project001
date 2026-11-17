@@ -63,7 +63,7 @@ export function ArchiveToggle({ path, date, hideArchive }: { path: string; date:
         type="checkbox"
         className="size-4 accent-primary"
         checked={hideArchive}
-        onChange={(e) => router.push(`${path}?date=${date}${e.target.checked ? '&archive=0' : ''}`)}
+        onChange={(e) => router.push(`${path}?date=${date}${e.target.checked ? '' : '&archive=1'}`)}
       />
       Без архивных штабелей
     </label>
