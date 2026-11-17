@@ -176,3 +176,11 @@ SELECT 'Погрузчик №1', 5 WHERE NOT EXISTS (SELECT 1 FROM loaders);
 
 ALTER TABLE ore_feeds ALTER COLUMN bucket_count TYPE numeric(10,1);
 ALTER TABLE crushing_lines ALTER COLUMN bucket_count TYPE numeric(10,1);
+
+ALTER TABLE loaders ADD COLUMN IF NOT EXISTS bucket_mode text NOT NULL DEFAULT 'weight';
+ALTER TABLE loaders ADD COLUMN IF NOT EXISTS bucket_volume_m3 numeric(10,3);
+ALTER TABLE stockpiles ADD COLUMN IF NOT EXISTS bulk_density numeric(10,3);
+ALTER TABLE crushing_lines ADD COLUMN IF NOT EXISTS bucket_weight_t numeric(10,3);
+UPDATE crushing_lines l SET bucket_weight_t = o.bucket_weight_t
+  FROM crushing_ops o
+  WHERE o.id = l.op_id AND l.bucket_weight_t IS NULL;
